@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Spese Mensili">
+<meta name="theme-color" content="#0d0d14">
+<title>Spese Mensili</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+:root{--bg:#0d0d14;--bg2:#12121c;--bg3:#1a1a26;--b1:#1e1e2c;--b2:#2a2a3e;--tx:#f0ede8;--mu:#555;--mu2:#777;--ac:#3d6bfd;--ac2:#6b8aff;--bl:#a0c4ff;--rd:#EF5350;--or:#FFB300;--gn:#4CAF50;--g2:#6dcc6d}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;overflow-x:hidden}
+input,select,button,textarea{font-family:'DM Sans',sans-serif}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ac)!important}
+::-webkit-scrollbar{width:2px}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+/* ── Login ── */
+#login{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px 24px;text-align:center;background:radial-gradient(ellipse at 50% 0%,#1a1a3e,var(--bg) 70%)}
+#login h1{font-family:'Playfair Display',serif;font-size:44px;font-weight:900;letter-spacing:-1px;margin-bottom:6px}
+#login .sub{color:var(--mu2);font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:40px}
+.lcard{background:var(--bg2);border:1px solid var(--b2);border-radius:24px;padding:28px 20px;width:100%;max-width:340px;margin-bottom:20px}
+.lcard .ico{font-size:48px;margin-bottom:16px}
+.lcard h2{font-size:18px;font-weight:600;margin-bottom:6px}
+.lcard p{color:var(--mu2);font-size:13px;line-height:1.6;margin-bottom:24px}
+.linfo{font-size:11px;color:var(--mu);line-height:2}
+.linfo span{color:var(--g2)}
+/* ── App ── */
+#app{display:none;flex-direction:column;height:100vh}
+#app.on{display:flex}
+/* ── Header ── */
+#hd{background:var(--bg);border-bottom:1px solid var(--b1);padding:16px 18px 0;position:sticky;top:0;z-index:10;flex-shrink:0}
+.hd-top{display:flex;justify-content:space-between;align-items:flex-start;max-width:480px;margin:0 auto}
+.hd-top h1{font-family:'Playfair Display',serif;font-size:24px;font-weight:900;letter-spacing:-.5px}
+.hd-sub{font-size:10px;color:var(--mu);letter-spacing:3px;text-transform:uppercase;margin-top:1px}
+.hd-right{text-align:right}
+.hd-lbl{font-size:10px;color:var(--mu);letter-spacing:1px;text-transform:uppercase}
+.hd-amt{font-size:22px;color:var(--bl);font-weight:600;letter-spacing:-.5px}
+.nav{display:flex;gap:4px;margin:12px auto 0;max-width:480px}
+.nav button{flex:1;padding:9px 0;border-radius:10px;border:none;background:transparent;color:var(--mu);font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:1.5px;font-weight:500;border-bottom:2px solid transparent;transition:all .2s}
+.nav button.on{color:var(--bl);border-bottom-color:var(--ac)}
+/* ── Content ── */
+#cnt{flex:1;overflow-y:auto;padding:18px;max-width:480px;width:100%;margin:0 auto;padding-bottom:48px}
+/* ── Buttons ── */
+.brow{display:flex;gap:8px;margin-bottom:8px}
+.bact{flex:1;padding:14px 10px;border-radius:14px;border:2px dashed var(--ac);background:rgba(61,107,253,.06);color:var(--bl);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all .2s}
+.bact:active{transform:scale(.97)}
+.bact .ico{font-size:24px}
+.bact .lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;font-weight:500}
+.bpicker{width:100%;padding:11px;border-radius:12px;border:1px solid #1c3a1a;background:#0d1e0d;color:var(--g2);font-size:13px;cursor:pointer;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:500}
+.bsm{width:100%;padding:9px;border-radius:10px;border:1px solid var(--b1);background:transparent;color:var(--mu2);font-size:12px;cursor:pointer;margin-bottom:14px;letter-spacing:1px}
+.bpri{flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(61,107,253,.3)}
+.bsec{flex:1;padding:13px;border-radius:12px;border:2px solid var(--b2);background:transparent;color:var(--mu2);font-size:14px;cursor:pointer}
+.bdl{width:100%;margin-top:6px;padding:13px;border-radius:14px;border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:500}
+.bdl.xl{background:linear-gradient(135deg,#1b3a1b,#2a5a2a);color:var(--g2)}
+.bdl.pdf{background:linear-gradient(135deg,#1a1a3e,#2a2a5e);color:var(--bl)}
+.bdl.q8{background:linear-gradient(135deg,#3a1b1b,#5a2a2a);color:#ff8a80}
+.lbar{width:100%;padding:14px;border-radius:14px;border:2px dashed var(--b1);background:#10101a;color:var(--mu);font-size:14px;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px}
+.sp{display:inline-block;animation:spin 1s linear infinite}
+/* ── Cards ── */
+.card{background:var(--bg2);border-radius:14px;overflow:hidden;border:1px solid var(--b1);animation:fadeUp .3s ease;margin-bottom:8px}
+.ci{display:flex}
+.cimg{width:64px;height:64px;object-fit:cover;flex-shrink:0}
+.cph{width:64px;height:64px;background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px}
+.cb{padding:10px 12px;flex:1}
+.ct{display:flex;justify-content:space-between;align-items:flex-start}
+.cn{font-size:13px;font-weight:600;color:var(--tx)}
+.cd{font-size:10px;color:var(--mu);margin-top:1px}
+.ca{font-size:15px;font-weight:700}
+.cc{display:flex;justify-content:space-between;align-items:center;margin-top:7px}
+.badge{font-size:10px;padding:2px 7px;border-radius:5px}
+.bdel{background:none;border:none;color:var(--mu);cursor:pointer;font-size:14px;padding:0 2px}
+.err{margin-bottom:12px;padding:10px 14px;background:#3e1515;border-radius:12px;color:#ff8a80;font-size:12px}
+.empty{text-align:center;color:var(--mu);margin-top:48px}
+.empty .ico{font-size:52px;margin-bottom:10px}
+.empty .t1{font-size:14px;color:var(--mu2)}
+.empty .t2{font-size:11px;color:#3a3a50;margin-top:5px}
+/* ── Modal ── */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+.ovc{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.mo{background:#14141f;border-radius:22px 22px 0 0;width:100%;max-width:480px;padding:24px 18px 34px;max-height:92vh;overflow-y:auto;border-top:2px solid var(--b2);animation:slideUp .3s ease}
+.moc{background:#14141f;border-radius:20px;padding:22px;width:100%;max-width:340px;border:1px solid var(--b2)}
+.mts{font-size:11px;letter-spacing:3px;color:var(--mu2);text-transform:uppercase;text-align:center;margin-bottom:3px}
+.mt{font-size:19px;font-weight:700;font-family:'Playfair Display',serif;text-align:center;margin-bottom:14px}
+.mr{display:flex;gap:10px;margin-top:8px}
+/* ── Form ── */
+.lb{font-size:11px;color:var(--mu2);letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.ip{width:100%;background:#1a1a28;border:1px solid var(--b2);border-radius:10px;padding:9px 11px;color:var(--tx);font-size:14px;margin-bottom:12px;font-family:'DM Sans',sans-serif}
+.pr{display:flex;gap:7px;margin-bottom:12px}
+.pb{flex:1;padding:7px 0;border-radius:9px;border:2px solid var(--b2);background:transparent;color:var(--mu2);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
+.pa{border-color:#5b7ffd!important;background:#5b7ffd20!important;color:#5b7ffd!important}
+.fuel{border-top:1px solid var(--b2);padding-top:12px;margin-bottom:4px}
+.ft{color:var(--rd);font-size:11px;margin-bottom:8px}
+.kmh{background:#1a2a1a;border:1px solid #2a5a2a;border-radius:8px;padding:7px 11px;margin-bottom:9px;font-size:11px;color:var(--g2)}
+/* ── Riepilogo ── */
+.tabs{display:flex;gap:5px;margin-bottom:16px}
+.tb{flex:1;padding:8px 0;border-radius:9px;border:none;background:transparent;color:var(--mu);font-size:10px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid transparent;font-weight:500;transition:all .2s}
+.tb.on{background:#1c2540;color:var(--bl);border-bottom-color:var(--ac)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:460px;font-family:'DM Sans',sans-serif}
+th{padding:8px 7px;color:var(--mu);text-align:left;border-bottom:1px solid var(--b1);font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:500;white-space:nowrap}
+td{padding:9px 7px;font-size:12px;border-bottom:1px solid #171724}
+tfoot td{background:#1c1c2e;font-weight:700;border:none}
+.cl{background:var(--bg2);border-radius:14px;overflow:hidden}
+.cr{display:grid;grid-template-columns:1fr 38px 85px;padding:11px 15px;border-bottom:1px solid #0f0f1a;align-items:center}
+.crh{padding:9px 15px;border-bottom:1px solid var(--b1)}
+.crf{background:#1c1c2e}
+/* ── Export section ── */
+.expsec{background:var(--bg2);border-radius:14px;padding:14px;margin-top:10px;border:1px solid var(--b1)}
+.exptt{font-size:11px;color:var(--mu2);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
+/* ── Session (foto in corso) ── */
+.sess{background:#0d1e0d;border:1px solid #1a3a1a;border-radius:14px;padding:14px;margin-bottom:10px}
+.sess-t{font-size:13px;font-weight:600;color:var(--g2);margin-bottom:4px}
+.sess-s{font-size:11px;color:var(--mu2);margin-bottom:12px}
+.sess-count{font-size:28px;font-weight:700;color:var(--g2);text-align:center;margin:8px 0}
+</style>
+</head>
+<body>
+<!-- Login -->
+<div id="login">
+  <h1>Spese Mensili</h1>
+  <p class="sub">D'Aniello Giuseppe</p>
+  <div class="lcard">
+    <div class="ico">💼</div>
+    <h2>Accedi con Google</h2>
+    <p>Selezioni tu i file da Drive. L'app non accede al Drive in automatico.</p>
+    <button class="bpri" style="width:100%;padding:14px;border-radius:12px;font-size:15px" onclick="doLogin()">🔐 Accedi con Google</button>
+  </div>
+  <div class="linfo">
+    <span>✓</span> Scegli tu quali file importare<br>
+    <span>✓</span> Nessun accesso automatico al Drive<br>
+    <span>✓</span> Dati salvati solo sul telefono
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <div id="hd">
+    <div class="hd-top">
+      <div><h1>Spese Mensili</h1><div class="hd-sub">D'Aniello Giuseppe</div></div>
+      <div class="hd-right"><div class="hd-lbl">Totale</div><div class="hd-amt" id="tot">€ 0.00</div></div>
+    </div>
+    <div class="nav">
+      <button class="on" onclick="vista('home')">📋 Scontrini</button>
+      <button onclick="vista('rep')">📊 Riepilogo</button>
+      <button onclick="vista('exp')">📥 Esporta</button>
+    </div>
+  </div>
+  <div id="cnt"></div>
+</div>
+
+<!-- Google APIs -->
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<script>
+// ═══════════════════════ CONFIG ═══════════════════════
+const CLIENT_ID='942404693526-riko3njld4ekjtcf44g194luscmv9oao.apps.googleusercontent.com';
+const API_KEY='AIzaSyCTsM4gHFG9qSF02dsNwO0rD6WUpo5-a9g';
+const SCOPES='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';
+
+const MESI=['','GENNAIO','FEBBRAIO','MARZO','APRILE','MAGGIO','GIUGNO','LUGLIO','AGOSTO','SETTEMBRE','OTTOBRE','NOVEMBRE','DICEMBRE'];
+const CATS=[
+  {n:'Alimentari',e:'🛒',c:'#4CAF50'},{n:'Ristoranti',e:'🍽️',c:'#FF7043'},
+  {n:'Farmacia',e:'💊',c:'#42A5F5'},{n:'Trasporti',e:'🚌',c:'#AB47BC'},
+  {n:'Casa',e:'🏠',c:'#FFB300'},{n:'Automobile',e:'🚗',c:'#78909C'},
+  {n:'Gasolio',e:'⛽',c:'#EF5350'},{n:'Altro',e:'📦',c:'#8D6E63'}
+];
+const COLS=['#4CAF50','#FF7043','#42A5F5','#AB47BC','#FFB300','#78909C','#EF5350','#8D6E63','#26C6DA','#EC407A','#7E57C2','#26A69A','#FFA726','#5C6BC0'];
+const EMJS=['🛒','🍽️','💊','🚌','🏠','🚗','⛽','📦','💈','🏋️','🎬','✈️','🐾','📚','🎮','💻','👔','🌿'];
+
+// ═══════════════════════ STATE ═══════════════════════
+let tok=null, gapiOk=false, gisOk=false;
+let sc=[], cats=[], kmP=139900, cur='home';
+
+function load(){
+  try{sc=JSON.parse(localStorage.getItem('sm_sc')||'[]');}catch{sc=[];}
+  try{cats=JSON.parse(localStorage.getItem('sm_cat')||'null')||[...CATS];}catch{cats=[...CATS];}
+  try{kmP=JSON.parse(localStorage.getItem('sm_km')||'139900');}catch{kmP=139900;}
+  try{tok=localStorage.getItem('sm_tok')||null;}catch{}
+}
+function save(){
+  try{localStorage.setItem('sm_sc',JSON.stringify(sc.map(({preview,...r})=>r)));}catch{}
+  try{localStorage.setItem('sm_cat',JSON.stringify(cats));}catch{}
+  try{localStorage.setItem('sm_km',JSON.stringify(kmP));}catch{}
+}
+
+// ═══════════════════════ AUTH ═══════════════════════
+function initGis(){
+  window._tc=google.accounts.oauth2.initTokenClient({
+    client_id:CLIENT_ID,scope:SCOPES,
+    callback:(r)=>{if(r.access_token){tok=r.access_token;localStorage.setItem('sm_tok',tok);startApp();}}
+  });
+  gisOk=true;
+}
+function doLogin(){
+  if(!gisOk){setTimeout(doLogin,300);return;}
+  window._tc.requestAccessToken({prompt:'consent'});
+}
+
+// ═══════════════════════ AI ═══════════════════════
+async function aiImg(b64,mt){
+  const nc=cats.map(c=>c.n).join(', ');
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,
+      messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:mt,data:b64}},
+        {type:'text',text:`Analizza questo scontrino. Rispondi SOLO JSON valido, niente markdown.\n{"negozio":"...","data":"GG/MM/AAAA","totale":numero,"categoria":"una tra: ${nc}","pagamento":"POS o Contanti","commissioni":null,"km":null,"litri":null,"prezzoLitro":null}\nSe carburante compila km litri prezzoLitro.`}
+      ]}]})});
+  const d=await r.json();
+  return JSON.parse(d.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim());
+}
+async function aiPdf(txt){
+  const nc=cats.map(c=>c.n).join(', ');
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,
+      messages:[{role:'user',content:`Se è uno scontrino di pagamento: {"negozio":"...","data":"GG/MM/AAAA","totale":numero,"categoria":"una tra: ${nc}","pagamento":"POS o Contanti","commissioni":null,"km":null,"litri":null,"prezzoLitro":null}. Altrimenti: {"skip":true}.\n\n${txt.slice(0,3000)}`}]})});
+  const d=await r.json();
+  return JSON.parse(d.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim());
+}
+function b64(blob){return new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(',')[1]);r.onerror=ko;r.readAsDataURL(blob);});}
+
+// ═══════════════════════ PICKER ═══════════════════════
+function openPicker(){
+  if(!gapiOk||!tok){alert('Attendere...');return;}
+  const v=new google.picker.DocsView(google.picker.ViewId.DOCS)
+    .setMimeTypes('image/jpeg,image/png,image/gif,image/webp,application/pdf')
+    .setMode(google.picker.DocsViewMode.LIST).setIncludeFolders(false);
+  new google.picker.PickerBuilder()
+    .addView(v).setOAuthToken(tok).setDeveloperKey(API_KEY)
+    .setTitle('Seleziona PDF/foto dalla cartella ZZZ NOTA SPESE')
+    .setMaxItems(30).setCallback(cbPicker).build().setVisible(true);
+}
+async function cbPicker(d){
+  if(d.action!==google.picker.Action.PICKED)return;
+  const files=d.docs||[];
+  if(!files.length)return;
+  let i=0;
+  const next=async()=>{
+    if(i>=files.length){render();return;}
+    const f=files[i];
+    spin(true,`Analizzo ${f.name} (${i+1}/${files.length})...`);
+    try{
+      let p=null;
+      if(f.mimeType&&f.mimeType.startsWith('image/')){
+        const res=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{headers:{Authorization:'Bearer '+tok}});
+        const blob=await res.blob();
+        const data=await b64(blob);
+        p=await aiImg(data,f.mimeType);
+      }else if(f.mimeType==='application/pdf'){
+        const res=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}/export?mimeType=text/plain`,{headers:{Authorization:'Bearer '+tok}});
+        if(res.ok){const txt=await res.text();p=await aiPdf(txt);}
+      }
+      spin(false);
+      if(p&&!p.skip){
+        confirm_({...p},form=>{sc.push({...form,id:Date.now(),fromDrive:true});if(form.categoria==='Gasolio'&&form.km)kmP=parseFloat(form.km);save();i++;next();},{idx:i,tot:files.length,fname:f.name});
+      }else{i++;next();}
+    }catch{spin(false);i++;next();}
+  };
+  next();
+}
+
+// ═══════════════════════ SESSIONE FOTO ═══════════════════════
+// Session: prende foto in sequenza finché l'utente non dice "ho finito"
+let sessQueue=[];
+let sessActive=false;
+let sessResolve=null;
+
+function startSessione(){
+  sessQueue=[];
+  sessActive=true;
+  render(); // mostra schermata sessione
+}
+
+function addFotoSess(file){
+  // aggiunge foto alla coda sessione
+  sessQueue.push(file);
+  document.getElementById('sess-cnt')&&(document.getElementById('sess-cnt').textContent=sessQueue.length);
+}
+
+async function fineSessione(){
+  sessActive=false;
+  if(!sessQueue.length){render();return;}
+  let i=0;
+  const next=async()=>{
+    if(i>=sessQueue.length){render();return;}
+    const file=sessQueue[i];
+    spin(true,`Analizzo foto ${i+1}/${sessQueue.length}...`);
+    const prev=URL.createObjectURL(file);
+    try{
+      const data=await b64(file);
+      const p=await aiImg(data,file.type||'image/jpeg');
+      spin(false);
+      confirm_({...p,preview:prev},form=>{sc.push({...form,id:Date.now(),preview:prev});if(form.categoria==='Gasolio'&&form.km)kmP=parseFloat(form.km);save();i++;next();},{idx:i,tot:sessQueue.length});
+    }catch{
+      spin(false);
+      confirm_({negozio:'',data:'',totale:'',categoria:'Altro',pagamento:'POS',preview:prev},form=>{sc.push({...form,id:Date.now(),preview:prev});save();i++;next();},{idx:i,tot:sessQueue.length});
+    }
+  };
+  next();
+}
+
+// ═══════════════════════ HANDLE FILE (singolo) ═══════════════════════
+async function handleFile(e){
+  const file=e.target.files[0];if(!file)return;e.target.value='';
+  if(sessActive){addFotoSess(file);renderSess();return;}
+  spin(true,'Analisi AI...');
+  const prev=URL.createObjectURL(file);
+  try{
+    const data=await b64(file);
+    const p=await aiImg(data,file.type||'image/jpeg');
+    spin(false);
+    confirm_({...p,preview:prev},form=>{sc.push({...form,id:Date.now(),preview:prev});if(form.categoria==='Gasolio'&&form.km)kmP=parseFloat(form.km);save();render();});
+  }catch{spin(false);confirm_({negozio:'',data:'',totale:'',categoria:'Altro',pagamento:'POS',preview:prev},form=>{sc.push({...form,id:Date.now(),preview:prev});save();render();});}
+}
+
+// ═══════════════════════ SPINNER ═══════════════════════
+function spin(on,msg=''){
+  let el=document.getElementById('_sp');
+  if(on){
+    if(!el){el=document.createElement('div');el.id='_sp';el.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px';
+      el.innerHTML=`<div style="font-size:38px;animation:spin 1s linear infinite">⏳</div><div id="_spm" style="color:#fff;font-size:13px;text-align:center;padding:0 28px"></div>`;document.body.appendChild(el);}
+    document.getElementById('_spm').textContent=msg;
+  }else{if(el)el.remove();}
+}
+
+// ═══════════════════════ CONFIRM MODAL ═══════════════════════
+function confirm_(d,cb,extra={}){
+  close_('_mc');
+  const ov=document.createElement('div');ov.className='ov';ov.id='_mc';
+  const isG=()=>ov.querySelector('#fc')?.value==='Gasolio';
+  ov.innerHTML=`<div class="mo">
+    ${extra.idx!==undefined?`<div style="display:flex;justify-content:space-between;margin-bottom:10px"><span style="font-size:10px;color:var(--mu2);text-transform:uppercase;letter-spacing:2px">Drive · ${extra.idx+1}/${extra.tot}</span><span style="font-size:10px;color:var(--mu)">${(extra.fname||'').slice(0,22)}</span></div>`:''}
+    <div class="mts">Verifica e conferma</div><div class="mt">Dati scontrino</div>
+    ${d.preview?`<img src="${d.preview}" style="width:100%;max-height:120px;object-fit:cover;border-radius:9px;margin-bottom:12px" alt="">`:''}
+    <div class="lb">Negozio</div><input class="ip" id="fn" value="${d.negozio||''}" placeholder="Es. Esselunga...">
+    <div class="lb">Data</div><input class="ip" id="fd" value="${d.data||''}" placeholder="GG/MM/AAAA">
+    <div class="lb">Categoria</div>
+    <select class="ip" id="fc" onchange="toggleF()">
+      ${cats.map(c=>`<option value="${c.n}" ${d.categoria===c.n?'selected':''}>${c.e} ${c.n}</option>`).join('')}
+    </select>
+    <div class="lb">Importo (€)</div><input class="ip" id="ft" type="number" step="0.01" value="${d.totale||''}" placeholder="0.00">
+    <div class="lb">Pagamento</div>
+    <div class="pr">${['POS','Contanti','Entrambi'].map(p=>`<button class="pb ${(d.pagamento||'POS')===p?'pa':''}" onclick="selP(this,'${p}')">${p}</button>`).join('')}</div>
+    <div id="fcr" style="display:${d.pagamento==='Contanti'||d.pagamento==='Entrambi'?'block':'none'}">
+      <div class="lb">Importo contanti (€)</div><input class="ip" id="fco" type="number" step="0.01" value="${d.contanti||''}" placeholder="0.00">
+    </div>
+    <div class="lb">Commissioni (€)</div><input class="ip" id="fcomm" type="number" step="0.01" value="${d.commissioni||''}" placeholder="0.00">
+    <div class="fuel" id="ff" style="display:${d.categoria==='Gasolio'?'block':'none'}">
+      <div class="ft">⛽ Dati carburante</div>
+      <div class="kmh">Km partenza mese prec.: <strong>${kmP.toLocaleString()}</strong></div>
+      <div class="lb">Km attuali</div><input class="ip" id="fkm" type="number" value="${d.km||''}" placeholder="${kmP}">
+      <div class="lb">Litri</div><input class="ip" id="flt" type="number" step="0.1" value="${d.litri||''}" placeholder="Es. 45.5">
+      <div class="lb">Prezzo al litro (€)</div><input class="ip" id="fpl" type="number" step="0.001" value="${d.prezzoLitro||''}" placeholder="Es. 1.899">
+    </div>
+    <div class="mr">
+      <button class="bsec" onclick="close_('_mc')">Annulla</button>
+      <button class="bpri" onclick="doConf()">✓ Conferma</button>
+    </div>
+  </div>`;
+  ov._cb=cb;document.body.appendChild(ov);
+}
+window.toggleF=()=>{const f=document.getElementById('ff');if(f)f.style.display=document.getElementById('fc')?.value==='Gasolio'?'block':'none';};
+window.selP=(btn,v)=>{document.querySelectorAll('.pb').forEach(b=>b.classList.remove('pa'));btn.classList.add('pa');const r=document.getElementById('fcr');if(r)r.style.display=(v==='Contanti'||v==='Entrambi')?'block':'none';};
+window.doConf=()=>{
+  const el=document.getElementById('_mc');if(!el)return;
+  const pay=el.querySelector('.pa');
+  const form={
+    negozio:document.getElementById('fn')?.value||'',
+    data:document.getElementById('fd')?.value||'',
+    totale:document.getElementById('ft')?.value||'',
+    categoria:document.getElementById('fc')?.value||'Altro',
+    pagamento:pay?.textContent||'POS',
+    contanti:document.getElementById('fco')?.value||'',
+    commissioni:document.getElementById('fcomm')?.value||'',
+    km:document.getElementById('fkm')?.value||'',
+    litri:document.getElementById('flt')?.value||'',
+    prezzoLitro:document.getElementById('fpl')?.value||''
+  };
+  const cb=el._cb;close_('_mc');if(cb)cb(form);
+};
+
+// ═══════════════════════ CAT MODAL ═══════════════════════
+function addCat(){
+  close_('_cc');
+  const ov=document.createElement('div');ov.className='ovc';ov.id='_cc';
+  ov.innerHTML=`<div class="moc">
+    <div style="font-size:16px;font-weight:700;font-family:'Playfair Display',serif;margin-bottom:16px">Nuova categoria</div>
+    <div class="lb">Nome</div><input class="ip" id="ccn" placeholder="Es. Sport, Cinema...">
+    <div class="lb">Emoji</div><div class="egrid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      ${EMJS.map(e=>`<button onclick="selE(this,'${e}')" style="width:32px;height:32px;border-radius:7px;border:2px solid var(--b2);background:transparent;font-size:16px;cursor:pointer">${e}</button>`).join('')}
+    </div>
+    <div class="lb">Colore</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+      ${COLS.map(c=>`<button onclick="selC(this,'${c}')" style="width:24px;height:24px;border-radius:50%;background:${c};border:2px solid transparent;cursor:pointer"></button>`).join('')}
+    </div>
+    <div class="mr">
+      <button class="bsec" onclick="close_('_cc')">Annulla</button>
+      <button class="bpri" onclick="saveCat()">Aggiungi</button>
+    </div>
+  </div>`;
+  ov._st={e:'📦',c:'#4CAF50'};document.body.appendChild(ov);
+}
+window.selE=(b,e)=>{document.querySelectorAll('.egrid button').forEach(x=>x.style.borderColor='var(--b2)');b.style.borderColor='#5b7ffd';document.getElementById('_cc')._st.e=e;};
+window.selC=(b,c)=>{document.querySelectorAll('.ovc button[style*="border-radius:50%"]').forEach(x=>x.style.borderColor='transparent');b.style.borderColor='#fff';document.getElementById('_cc')._st.c=c;};
+window.saveCat=()=>{const n=document.getElementById('ccn')?.value.trim();if(!n)return;const s=document.getElementById('_cc')?._st;cats.push({n,e:s.e,c:s.c});save();close_('_cc');};
+function close_(id){const el=document.getElementById(id);if(el)el.remove();}
+
+// ═══════════════════════ RENDER ═══════════════════════
+function upTot(){const t=sc.reduce((a,s)=>a+(parseFloat(s.totale)||0),0);document.getElementById('tot').textContent='€ '+t.toFixed(2);}
+function vista(v){cur=v;document.querySelectorAll('.nav button').forEach((b,i)=>b.classList.toggle('on',['home','rep','exp'][i]===v));render();}
+function render(){upTot();if(cur==='home')renderHome();else if(cur==='rep')renderRep();else renderExp();}
+
+function renderSess(){
+  const c=document.getElementById('cnt');
+  c.innerHTML=`
+    <div class="sess">
+      <div class="sess-t">📸 Sessione foto in corso</div>
+      <div class="sess-s">Scatta tutte le foto che vuoi, poi premi "Ho finito"</div>
+      <div class="sess-count" id="sess-cnt">${sessQueue.length}</div>
+      <div style="color:var(--mu2);font-size:11px;text-align:center;margin-bottom:12px">foto aggiunte</div>
+    </div>
+    <input type="file" id="isess" accept="image/*" capture="environment" style="display:none">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="bact" style="border-color:var(--gn)" onclick="document.getElementById('isess').click()">
+        <span class="ico">📸</span><span class="lbl">Aggiungi foto</span>
+      </button>
+      <button class="bact" style="border-color:var(--rd);color:#ff8a80" onclick="fineSessione()">
+        <span class="ico">✅</span><span class="lbl">Ho finito</span>
+      </button>
+    </div>
+    <button class="bsm" onclick="sessActive=false;render()">Annulla sessione</button>
+  `;
+  document.getElementById('isess').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;e.target.value='';addFotoSess(f);renderSess();});
+}
+
+function renderHome(){
+  if(sessActive){renderSess();return;}
+  const srt=[...sc].sort((a,b)=>{const da=a.data?a.data.split('/').reverse().join(''):'0',db=b.data?b.data.split('/').reverse().join(''):'0';return da>db?-1:1;});
+  document.getElementById('cnt').innerHTML=`
+    <input type="file" id="ica" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="iga" accept="image/*,application/pdf" style="display:none">
+    <div class="brow">
+      <button class="bact" onclick="document.getElementById('ica').click()"><span class="ico">📸</span><span class="lbl">Fotocamera</span></button>
+      <button class="bact" onclick="document.getElementById('iga').click()"><span class="ico">🗂️</span><span class="lbl">Galleria</span></button>
+    </div>
+    <button class="bact" style="width:100%;flex-direction:row;justify-content:center;gap:10px;margin-bottom:6px;border-color:#1a8a1a" onclick="startSessione()">
+      <span style="font-size:18px">📸📸📸</span><span class="lbl">Scatta più foto in sequenza</span>
+    </button>
+    <button class="bpicker" onclick="openPicker()">☁️ Importa da ZZZ NOTA SPESE (Drive)</button>
+    <button class="bsm" onclick="addCat()">+ Aggiungi categoria</button>
+    <div id="err" style="display:none" class="err"></div>
+    ${srt.length===0?`<div class="empty"><div class="ico">🧾</div><div class="t1">Nessuno scontrino</div><div class="t2">Fotografa o importa da Drive!</div></div>`:''}
+    <div>${srt.map(renderCard).join('')}</div>
+  `;
+  document.getElementById('ica').addEventListener('change',handleFile);
+  document.getElementById('iga').addEventListener('change',handleFile);
+}
+
+function renderCard(s){
+  const cat=cats.find(c=>c.n===s.categoria)||{c:'#888',e:'📦'};
+  const img=s.preview?`<img class="cimg" src="${s.preview}" alt="">`:`<div class="cph">${s.fromDrive?'☁️':'🧾'}</div>`;
+  return `<div class="card"><div class="ci">${img}<div class="cb">
+    <div class="ct"><div><div class="cn">${s.negozio||'—'}</div><div class="cd">${s.data||'n.d.'}</div></div>
+    <div class="ca" style="color:${cat.c}">€ ${parseFloat(s.totale||0).toFixed(2)}</div></div>
+    <div class="cc"><span class="badge" style="background:${cat.c}1a;color:${cat.c}">${cat.e} ${s.categoria}</span>
+    <button class="bdel" onclick="delSc(${s.id})">🗑️</button></div>
+  </div></div></div>`;
+}
+window.delSc=id=>{sc=sc.filter(s=>s.id!==id);save();render();};
+
+// ═══════════════════════ RIEPILOGO ═══════════════════════
+function renderRep(){
+  document.getElementById('cnt').innerHTML=`
+    <div class="tabs">
+      <button class="tb on" onclick="swT(this,'tc')">📊 Totali</button>
+      <button class="tb" onclick="swT(this,'ts')">📋 Spese</button>
+      <button class="tb" onclick="swT(this,'tg')">⛽ Gasolio</button>
+    </div>
+    <div id="tc">${rCat()}</div>
+    <div id="ts" style="display:none">${rSpese()}</div>
+    <div id="tg" style="display:none">${rGas()}</div>`;
+}
+window.swT=(btn,id)=>{document.querySelectorAll('.tb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');['tc','ts','tg'].forEach(t=>{const el=document.getElementById(t);if(el)el.style.display=t===id?'block':'none';});};
+
+function rCat(){
+  const tG=sc.reduce((a,s)=>a+(parseFloat(s.totale)||0),0);
+  const rows=cats.filter(cat=>sc.some(s=>s.categoria===cat.n)).map(cat=>{
+    const n=sc.filter(s=>s.categoria===cat.n).length,tot=sc.filter(s=>s.categoria===cat.n).reduce((a,s)=>a+(parseFloat(s.totale)||0),0);
+    return `<div class="cr"><span style="font-size:13px">${cat.e} ${cat.n}</span><span style="color:var(--mu);text-align:center">${n}</span><span style="color:${cat.c};font-weight:700;text-align:right">€ ${tot.toFixed(2)}</span></div>`;
+  }).join('');
+  return `<div class="cl">
+    <div class="cr crh"><span style="font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1px">Categoria</span><span style="font-size:10px;color:var(--mu);text-align:center">N.</span><span style="font-size:10px;color:var(--mu);text-align:right">Totale</span></div>
+    ${rows||'<div style="padding:18px;text-align:center;color:var(--mu)">Nessuna spesa</div>'}
+    <div class="cr crf"><span style="color:var(--bl);font-size:13px">TOTALE</span><span style="color:var(--bl);text-align:center">${sc.length}</span><span style="color:var(--bl);font-weight:700;text-align:right">€ ${tG.toFixed(2)}</span></div>
+  </div>`;
+}
+function rSpese(){
+  const sp=sc.filter(s=>s.categoria!=='Gasolio').sort((a,b)=>a.data>b.data?1:-1);
+  const tP=sp.filter(s=>s.pagamento!=='Contanti').reduce((a,s)=>a+(parseFloat(s.totale)||0),0);
+  const tC=sp.reduce((a,s)=>a+(parseFloat(s.contanti)||0),0);
+  const tCo=sp.reduce((a,s)=>a+(parseFloat(s.commissioni)||0),0);
+  return `<div class="tw"><table>
+    <thead><tr><th>Data</th><th>Descrizione</th><th>Cat.</th><th style="text-align:right">POS €</th><th style="text-align:right">Cont. €</th><th style="text-align:right">Comm. €</th></tr></thead>
+    <tbody>${sp.length===0?'<tr><td colspan="6" style="text-align:center;color:var(--mu);padding:20px">Nessuna spesa</td></tr>':sp.map(s=>{
+      const cat=cats.find(c=>c.n===s.categoria)||{c:'#888',e:'📦'};
+      const pos=s.pagamento==='Contanti'?0:(parseFloat(s.totale)||0);
+      const cont=s.pagamento==='Contanti'?(parseFloat(s.contanti||s.totale)||0):s.pagamento==='Entrambi'?(parseFloat(s.contanti)||0):0;
+      return `<tr><td style="color:var(--mu);white-space:nowrap">${s.data||'—'}</td><td>${s.negozio||'—'}</td>
+        <td><span style="background:${cat.c}22;color:${cat.c};border-radius:5px;padding:1px 6px;font-size:10px">${cat.e} ${s.categoria}</span></td>
+        <td style="color:var(--bl);text-align:right">${pos>0?'€ '+pos.toFixed(2):'—'}</td>
+        <td style="color:var(--or);text-align:right">${cont>0?'€ '+cont.toFixed(2):'—'}</td>
+        <td style="color:var(--rd);text-align:right">${s.commissioni?'€ '+parseFloat(s.commissioni).toFixed(2):'—'}</td></tr>`;
+    }).join('')}</tbody>
+    ${sp.length>0?`<tfoot><tr><td colspan="3" style="color:var(--bl)">TOTALE</td><td style="color:var(--bl);text-align:right">€ ${tP.toFixed(2)}</td><td style="color:var(--or);text-align:right">€ ${tC.toFixed(2)}</td><td style="color:var(--rd);text-align:right">€ ${tCo.toFixed(2)}</td></tr></tfoot>`:''}
+  </table></div>`;
+}
+function rGas(){
+  const sp=sc.filter(s=>s.categoria==='Gasolio').sort((a,b)=>a.data>b.data?1:-1);
+  const tS=sp.reduce((a,s)=>a+(parseFloat(s.totale)||0),0);
+  return `<div class="tw"><table>
+    <thead><tr><th>Data</th><th>Km</th><th>Litri</th><th>€/Lt</th><th>Totale</th><th>Δ km</th><th>Lt/100</th></tr></thead>
+    <tbody>${sp.length===0?'<tr><td colspan="7" style="text-align:center;color:var(--mu);padding:20px">Nessun rifornimento</td></tr>':sp.map((s,i)=>{
+      const prev=sp[i-1];const kmN=parseFloat(s.km)||0;
+      const pK=i===0?(parseFloat(s.kmPartenza)||kmP):(parseFloat(prev.km)||0);
+      const dK=kmN&&pK?(kmN-pK):null;
+      const lK=dK&&s.litri?(parseFloat(s.litri)/dK*100).toFixed(1):null;
+      return `<tr><td style="color:var(--mu);white-space:nowrap">${s.data||'—'}</td>
+        <td>${s.km?parseInt(s.km).toLocaleString():'—'}</td>
+        <td>${s.litri?parseFloat(s.litri).toFixed(1):'—'}</td>
+        <td style="color:var(--mu2)">${s.prezzoLitro?'€ '+parseFloat(s.prezzoLitro).toFixed(3):'—'}</td>
+        <td style="color:var(--rd);font-weight:700">${s.totale?'€ '+parseFloat(s.totale).toFixed(2):'—'}</td>
+        <td style="color:var(--mu2)">${dK!==null?Math.round(dK)+' km':'—'}</td>
+        <td style="color:var(--or)">${lK?lK+' L':'—'}</td></tr>`;
+    }).join('')}</tbody>
+    ${sp.length>0?`<tfoot><tr><td colspan="4" style="color:var(--rd)">TOTALE</td><td style="color:var(--rd)">€ ${tS.toFixed(2)}</td><td colspan="2"></td></tr></tfoot>`:''}
+  </table></div>`;
+}
+
+// ═══════════════════════ EXPORT ═══════════════════════
+function renderExp(){
+  const hasData=sc.length>0;
+  document.getElementById('cnt').innerHTML=`
+    <div class="expsec">
+      <div class="exptt">📥 Esporta i file del mese</div>
+      ${!hasData?`<div style="color:var(--mu);font-size:13px;text-align:center;padding:20px">Aggiungi prima gli scontrini nella scheda 📋</div>`:`
+      <button class="bdl xl" onclick="expExcel()" ${!hasData?'disabled':''}>📊 Excel — Nota Spese + Q8</button>
+      <button class="bdl pdf" onclick="expPdfScontrini()" ${!hasData?'disabled':''}>📄 PDF Scontrini (in ordine di data)</button>
+      <button class="bdl q8" onclick="expPdfQ8()" ${!sc.some(s=>s.categoria==='Gasolio')?'disabled style="opacity:.4"':''}>⛽ PDF Ricevute Q8</button>
+      <div style="font-size:11px;color:var(--mu);margin-top:10px;line-height:1.7">
+        Dopo il download, carica i file nella cartella:<br>
+        <span style="color:var(--mu2)">ZZZ NOTA SPESE → ${new Date().getFullYear()} → ${String(new Date().getMonth()+1).padStart(2,'0')} ${MESI[new Date().getMonth()+1]}</span>
+      </div>`}
+    </div>
+  `;
+}
+
+// ─── EXCEL ────────────────────────────────────────────
+function expExcel(){
+  const oggi=new Date();
+  const mNum=oggi.getMonth()+1;
+  const anno=oggi.getFullYear();
+  const wb=XLSX.utils.book_new();
+
+  // ── Foglio 1: Nota Spese ──
+  const spGen=sc.filter(s=>s.categoria!=='Gasolio').sort((a,b)=>a.data>b.data?1:-1);
+  // Header
+  const nsData=[
+    [`GENOVA - DIGA FASE B - C158 -`,'','','','','','','','',''],
+    [`NOTA SPESA N. ${mNum} / ${String(anno).slice(2)} - D\'ANIELLO GIUSEPPE - Tessear n°4830********100`,'','','','','','','','',''],
+    ['Giorno','Saldo Movimenti Carta','','Saldo contanti','Prelievo contanti','Pagamento in contanti','Pagamento con POS','Commissioni prelievo altre banche','DESCRIZIONE',''],
+    ['mese precedente','- €','','','','','','','','']
+  ];
+  // Righe spese
+  spGen.forEach(s=>{
+    const pos=s.pagamento==='Contanti'?null:(parseFloat(s.totale)||null);
+    const cont=s.pagamento==='Contanti'?(parseFloat(s.contanti||s.totale)||null):s.pagamento==='Entrambi'?(parseFloat(s.contanti)||null):null;
+    const comm=s.commissioni?parseFloat(s.commissioni):null;
+    nsData.push([s.data||'',null,null,cont,null,null,pos,comm,s.negozio||'','']);
+  });
+  // Totali
+  const totPos=spGen.filter(s=>s.pagamento!=='Contanti').reduce((a,s)=>a+(parseFloat(s.totale)||0),0);
+  const totCont=spGen.reduce((a,s)=>a+(parseFloat(s.contanti)||0),0);
+  const totComm=spGen.reduce((a,s)=>a+(parseFloat(s.commissioni)||0),0);
+  nsData.push(['',null,null,totCont>0?totCont:null,null,null,totPos>0?totPos:null,totComm>0?totComm:null,'','']);
+  nsData.push(['Residuo Carta','','','','','','','€ 0.00','','']);
+  nsData.push(['Residuo Contanti','','','','','','',`-€ ${totPos.toFixed(2)}`,'','']);
+  nsData.push(['Credito Totale','','','','','','',`-€ ${totPos.toFixed(2)}`,'','']);
+  nsData.push(['','','','','',totPos>0?totPos:null,'','','','']);
+  const ws1=XLSX.utils.aoa_to_sheet(nsData);
+  XLSX.utils.book_append_sheet(wb,ws1,`Nota_Spesa_${String(mNum).padStart(2,'0')}-${String(anno).slice(2)}`);
+
+  // ── Foglio 2: Gasolio Q8 ──
+  const gasoline=sc.filter(s=>s.categoria==='Gasolio').sort((a,b)=>a.data>b.data?1:-1);
+  const q8Data=[
+    [`NOTA SPESA N.${mNum}/${String(anno).slice(2)} - Q8- D\'ANIELLO GIUSEPPE - Tessear n°****01***700*20025`],
+    ['','',' '+kmP.toLocaleString()],
+    ['Giorno','Saldo Movimenti Carta','Saldo contanti','Pagamento carta','Pagamento in contanti','','Commissioni prelievo altre banche','km','','lt','d km','Lt/km']
+  ];
+  let prevKm=kmP;
+  gasoline.forEach(s=>{
+    const km=parseFloat(s.km)||0;
+    const dKm=km&&prevKm?(km-prevKm):null;
+    const lt=s.litri?parseFloat(s.litri):null;
+    const ltKm=dKm&&lt?(lt/dKm).toFixed(6):null;
+    const tot=s.totale?parseFloat(s.totale):null;
+    q8Data.push([s.data||'',null,null,tot,null,null,null,km?km.toLocaleString():null,s.prezzoLitro?parseFloat(s.prezzoLitro):null,lt,dKm?Math.round(dKm):null,ltKm]);
+    if(km)prevKm=km;
+  });
+  const totQ8=gasoline.reduce((a,s)=>a+(parseFloat(s.totale)||0),0);
+  q8Data.push([null,null,null,totQ8>0?totQ8:null,null,null,null,null,null,null,null,null]);
+  q8Data.push(['Residuo Carta','','',`-€ ${totQ8.toFixed(2)}`]);
+  q8Data.push(['Residuo Contanti','','',`€ ${totQ8.toFixed(2)}`]);
+  q8Data.push(['Credito Totale','','','€ 0.00']);
+  const ws2=XLSX.utils.aoa_to_sheet(q8Data);
+  XLSX.utils.book_append_sheet(wb,ws2,`Gasolio Q8 ${String(mNum).padStart(2,'0')}_${String(anno).slice(2)}`);
+
+  XLSX.writeFile(wb,`Nota_spesa_${String(mNum).padStart(2,'0')}_${anno}.xlsx`);
+}
+
+// ─── PDF SCONTRINI ────────────────────────────────────
+function expPdfScontrini(){
+  const ord=[...sc].sort((a,b)=>{
+    const da=a.data?a.data.split('/').reverse().join(''):'0',db=b.data?b.data.split('/').reverse().join(''):'0';return da>db?1:-1;
+  });
+  const tot=sc.reduce((a,s)=>a+(parseFloat(s.totale)||0),0);
+  const righe=ord.map((s,i)=>`
+    <div style="page-break-inside:avoid;margin-bottom:24px;border:1px solid #ccd;border-radius:10px;overflow:hidden">
+      <div style="background:#1e2040;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:14px;font-weight:bold">${s.negozio||'Scontrino'}</div>
+        <div style="font-size:10px;opacity:.6">${s.categoria} · ${s.data||'n.d.'} · ${s.pagamento||''}</div></div>
+        <div style="font-size:16px;font-weight:bold">€ ${parseFloat(s.totale||0).toFixed(2)}</div>
+      </div>
+      ${s.preview?`<div style="background:#f8f8fa;text-align:center;padding:4px"><img src="${s.preview}" style="max-width:100%;max-height:320px;object-fit:contain"></div>`:'<div style="padding:12px;text-align:center;color:#aaa;font-size:12px">File da Google Drive</div>'}
+      <div style="padding:6px 14px;font-size:10px;color:#666;display:flex;gap:12px;border-top:1px solid #eee">
+        ${s.commissioni?`<span>Comm.: € ${parseFloat(s.commissioni).toFixed(2)}</span>`:''}
+        ${s.km?`<span>Km: ${parseInt(s.km).toLocaleString()}</span>`:''}
+        ${s.litri?`<span>Lt: ${parseFloat(s.litri).toFixed(1)}</span>`:''}
+      </div>
+    </div>`).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scontrini</title>
+  <style>body{margin:0;padding:20px;font-family:Georgia,serif;max-width:700px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 3px}.meta{color:#888;font-size:11px;margin-bottom:20px;border-bottom:2px solid #eee;padding-bottom:12px}
+  @media print{body{padding:0}}</style></head><body>
+  <h1>Spese Mensili — Scontrini</h1>
+  <div class="meta">D'Aniello Giuseppe · ${sc.length} scontrini · Totale: € ${tot.toFixed(2)}</div>
+  ${righe}</body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),600);
+}
+
+// ─── PDF Q8 ────────────────────────────────────────────
+function expPdfQ8(){
+  const gas=sc.filter(s=>s.categoria==='Gasolio').sort((a,b)=>{
+    const da=a.data?a.data.split('/').reverse().join(''):'0',db=b.data?b.data.split('/').reverse().join(''):'0';return da>db?1:-1;
+  });
+  if(!gas.length){alert('Nessuna ricevuta Q8');return;}
+  const tot=gas.reduce((a,s)=>a+(parseFloat(s.totale)||0),0);
+  let prevKm=kmP;
+  const righe=gas.map(s=>{
+    const km=parseFloat(s.km)||0;const dKm=km&&prevKm?(km-prevKm):null;
+    const lt=s.litri?parseFloat(s.litri):null;const ltKm=dKm&&lt?(lt/dKm*100).toFixed(1):null;
+    if(km)prevKm=km;
+    return `
+    <div style="page-break-inside:avoid;margin-bottom:20px;border:1px solid #ccd;border-radius:10px;overflow:hidden">
+      <div style="background:#3a1010;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:14px;font-weight:bold">⛽ ${s.negozio||'Gasolio Q8'}</div>
+        <div style="font-size:10px;opacity:.6">${s.data||'n.d.'} · ${s.pagamento||''}</div></div>
+        <div style="font-size:16px;font-weight:bold;color:#ff8a80">€ ${parseFloat(s.totale||0).toFixed(2)}</div>
+      </div>
+      ${s.preview?`<div style="background:#f8f8fa;text-align:center;padding:4px"><img src="${s.preview}" style="max-width:100%;max-height:320px;object-fit:contain"></div>`:'<div style="padding:12px;text-align:center;color:#aaa;font-size:12px">File da Google Drive</div>'}
+      <div style="padding:6px 14px;font-size:10px;color:#666;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid #eee">
+        <span>Km: <b>${km?km.toLocaleString():'—'}</b></span>
+        <span>Litri: <b>${lt?lt.toFixed(1):'—'}</b></span>
+        <span>€/Lt: <b>${s.prezzoLitro?parseFloat(s.prezzoLitro).toFixed(3):'—'}</b></span>
+        <span>Δ km: <b>${dKm?Math.round(dKm):'—'}</b></span>
+        <span>Lt/100: <b>${ltKm?ltKm+' L':'—'}</b></span>
+        <span>Comm.: <b>${s.commissioni?'€ '+parseFloat(s.commissioni).toFixed(2):'—'}</b></span>
+      </div>
+    </div>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Ricevute Q8</title>
+  <style>body{margin:0;padding:20px;font-family:Georgia,serif;max-width:700px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 3px}.meta{color:#888;font-size:11px;margin-bottom:20px;border-bottom:2px solid #eee;padding-bottom:12px}
+  @media print{body{padding:0}}</style></head><body>
+  <h1>Ricevute Q8 / Gasolio</h1>
+  <div class="meta">D'Aniello Giuseppe · ${gas.length} rifornimenti · Totale: € ${tot.toFixed(2)} · Km partenza: ${kmP.toLocaleString()}</div>
+  ${righe}</body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),600);
+}
+
+// ═══════════════════════ INIT ═══════════════════════
+function startApp(){
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').classList.add('on');
+  render();
+}
+window.onload=()=>{
+  load();
+  gapi.load('picker',()=>{gapiOk=true;});
+  const t=setInterval(()=>{if(typeof google!=='undefined'&&google.accounts){clearInterval(t);initGis();}},300);
+  if(tok)startApp();else document.getElementById('login').style.display='flex';
+};
+</script>
+</body>
+</html>
