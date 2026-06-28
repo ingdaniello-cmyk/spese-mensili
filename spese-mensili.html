@@ -155,8 +155,7 @@ tfoot td{background:#1c1c2e;font-weight:700;border:none}
   <div id="cnt"></div>
 </div>
 
-<!-- Google APIs -->
-<script src="https://apis.google.com/js/api.js"></script>
+<!-- Google Identity Services only (no Picker needed) -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
@@ -236,27 +235,149 @@ async function aiPdf(txt){
 }
 function b64(blob){return new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(',')[1]);r.onerror=ko;r.readAsDataURL(blob);});}
 
-// ═══════════════════════ PICKER ═══════════════════════
+// ═══════════════════════ DRIVE BROWSER (no Picker) ═══════════════════════
 const ZZZ_ID='1spHTpaE1kQKTlzMc9C0bn7KXG89hne2L';
 
+// Naviga Drive con API diretta — nessun Picker esterno
+async function driveList(parentId){
+  const url=`https://www.googleapis.com/drive/v3/files?q='${parentId}'+in+parents+and+trashed=false&orderBy=name&fields=files(id,name,mimeType)&pageSize=50`;
+  const r=await fetch(url,{headers:{Authorization:'Bearer '+tok}});
+  const d=await r.json();
+  return d.files||[];
+}
+
 function openPicker(){
-  if(!gapiOk||!tok){alert('Attendere...');return;}
-  // Vista navigabile che parte dalla cartella ZZZ NOTA SPESE
-  const v=new google.picker.DocsView(google.picker.ViewId.DOCS)
-    .setMimeTypes('image/jpeg,image/png,image/gif,image/webp,application/pdf')
-    .setMode(google.picker.DocsViewMode.LIST)
-    .setIncludeFolders(true)
-    .setSelectFolderEnabled(false)
-    .setParent(ZZZ_ID);
-  // Vista alternativa per navigare le sottocartelle
-  const vFolders=new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-    .setParent(ZZZ_ID)
-    .setSelectFolderEnabled(false);
-  new google.picker.PickerBuilder()
-    .addView(v)
-    .setOAuthToken(tok).setDeveloperKey(API_KEY)
-    .setTitle('📁 ZZZ NOTA SPESE → Anno → Mese → seleziona file')
-    .setMaxItems(30).setCallback(cbPicker).build().setVisible(true);
+  if(!tok){alert('Effettua prima il login.');return;}
+  mostraBrowser(ZZZ_ID,'📁 ZZZ NOTA SPESE',[]);
+}
+
+async function mostraBrowser(folderId, folderName, breadcrumb){
+  close_('_db');
+  const ov=document.createElement('div');ov.className='ov';ov.id='_db';
+
+  ov.innerHTML=`<div class="mo">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:700;font-family:'Playfair Display',serif">☁️ Drive</div>
+      <button onclick="close_('_db')" style="background:none;border:none;color:var(--mu2);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <!-- Breadcrumb -->
+    <div style="font-size:11px;color:var(--mu2);margin-bottom:10px;padding:6px 10px;background:var(--bg3);border-radius:8px;line-height:1.6">
+      ${folderName}
+    </div>
+    <div id="db-list" style="min-height:120px;display:flex;align-items:center;justify-content:center">
+      <span style="color:var(--mu);font-size:13px">⏳ Carico...</span>
+    </div>
+    <div id="db-sel" style="display:none;margin-top:10px">
+      <div style="font-size:11px;color:var(--g2);margin-bottom:8px" id="db-sel-count">0 file selezionati</div>
+      <button class="bpri" style="width:100%" onclick="importaSelezionati()">✓ Importa selezionati</button>
+    </div>
+    <button class="bsec" style="width:100%;margin-top:8px" onclick="close_('_db')">Annulla</button>
+  </div>`;
+  ov._breadcrumb=breadcrumb;
+  ov._selected=[];
+  document.body.appendChild(ov);
+
+  // Carica contenuto cartella
+  try{
+    const files=await driveList(folderId);
+    const listEl=document.getElementById('db-list');
+    if(!files.length){listEl.innerHTML='<span style="color:var(--mu);font-size:13px">Cartella vuota</span>';return;}
+
+    const folders=files.filter(f=>f.mimeType==='application/vnd.google-apps.folder');
+    const docs=files.filter(f=>f.mimeType!=='application/vnd.google-apps.folder'&&
+      (f.mimeType.startsWith('image/')||f.mimeType==='application/pdf'));
+
+    let html='';
+    // Cartelle navigabili
+    folders.forEach(f=>{
+      html+=`<div onclick="mostraBrowser('${f.id}',\`📁 ${f.name}\`,[...document.getElementById('_db')._breadcrumb,{id:'${folderId}',name:'${folderName}'}])"
+        style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--bg2);border-radius:10px;margin-bottom:6px;cursor:pointer;border:1px solid var(--b1)">
+        <span style="font-size:20px">📁</span>
+        <span style="font-size:14px;color:var(--tx)">${f.name}</span>
+        <span style="margin-left:auto;color:var(--mu)">›</span>
+      </div>`;
+    });
+
+    // Torna indietro
+    if(breadcrumb.length>0){
+      const prev=breadcrumb[breadcrumb.length-1];
+      html=`<div onclick="mostraBrowser('${prev.id}',\`${prev.name}\`,[...document.getElementById('_db')._breadcrumb.slice(0,-1)])"
+        style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:#1a1a0d;border-radius:10px;margin-bottom:6px;cursor:pointer;border:1px solid #2a2a1a">
+        <span style="font-size:18px">⬆️</span>
+        <span style="font-size:13px;color:var(--or)">Su: ${prev.name}</span>
+      </div>`+html;
+    }
+
+    // File selezionabili
+    if(docs.length){
+      html+=`<div style="font-size:10px;color:var(--mu);letter-spacing:2px;text-transform:uppercase;margin:10px 0 6px">File da importare</div>`;
+      docs.forEach(f=>{
+        const ico=f.mimeType==='application/pdf'?'📄':'🖼️';
+        html+=`<div id="fi-${f.id}" onclick="toggleFile('${f.id}','${f.name}','${f.mimeType}')"
+          style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--bg2);border-radius:10px;margin-bottom:6px;cursor:pointer;border:1px solid var(--b1);transition:all .15s">
+          <span style="font-size:18px">${ico}</span>
+          <span style="font-size:13px;color:var(--tx);flex:1">${f.name}</span>
+          <span id="chk-${f.id}" style="font-size:18px;color:var(--mu)">○</span>
+        </div>`;
+      });
+    } else if(!folders.length){
+      html+='<div style="color:var(--mu);font-size:12px;text-align:center;padding:10px">Nessun file PDF o immagine</div>';
+    }
+
+    listEl.innerHTML=html;
+  }catch(e){
+    document.getElementById('db-list').innerHTML=`<span style="color:#ff8a80;font-size:12px">Errore: ${e.message}</span>`;
+  }
+}
+
+let _dbSelected=[];
+window.toggleFile=(id,name,mime)=>{
+  const idx=_dbSelected.findIndex(f=>f.id===id);
+  const chk=document.getElementById('chk-'+id);
+  const row=document.getElementById('fi-'+id);
+  if(idx>=0){
+    _dbSelected.splice(idx,1);
+    if(chk)chk.textContent='○';if(chk)chk.style.color='var(--mu)';
+    if(row)row.style.borderColor='var(--b1)';if(row)row.style.background='var(--bg2)';
+  }else{
+    _dbSelected.push({id,name,mimeType:mime});
+    if(chk)chk.textContent='✓';if(chk)chk.style.color='var(--g2)';
+    if(row)row.style.borderColor='var(--gn)';if(row)row.style.background='#0d1a0d';
+  }
+  const selDiv=document.getElementById('db-sel');
+  const cntEl=document.getElementById('db-sel-count');
+  if(selDiv)selDiv.style.display=_dbSelected.length>0?'block':'none';
+  if(cntEl)cntEl.textContent=`${_dbSelected.length} file selezionati`;
+};
+
+async function importaSelezionati(){
+  const files=[..._dbSelected];
+  _dbSelected=[];
+  close_('_db');
+  if(!files.length)return;
+  let i=0;
+  const next=async()=>{
+    if(i>=files.length){render();return;}
+    const f=files[i];
+    spin(true,`Analizzo ${f.name} (${i+1}/${files.length})...`);
+    try{
+      let p=null;
+      if(f.mimeType&&f.mimeType.startsWith('image/')){
+        const res=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{headers:{Authorization:'Bearer '+tok}});
+        const blob=await res.blob();
+        const data=await b64(blob);
+        p=await aiImg(data,f.mimeType);
+      }else if(f.mimeType==='application/pdf'){
+        const res=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}/export?mimeType=text/plain`,{headers:{Authorization:'Bearer '+tok}});
+        if(res.ok){const txt=await res.text();p=await aiPdf(txt);}
+      }
+      spin(false);
+      if(p&&!p.skip){
+        confirm_({...p},(form)=>{sc.push({...form,id:Date.now(),fromDrive:true});if(form.categoria==='Gasolio'&&form.km)kmP=parseFloat(form.km);save();i++;next();},{idx:i,tot:files.length,fname:f.name,fromDrive:true});
+      }else{i++;next();}
+    }catch(e){spin(false);i++;next();}
+  };
+  next();
 }
 
 // Legge i km finali dell'Excel del mese precedente da Drive
@@ -289,34 +410,7 @@ async function leggiKmMesePrecedente(annoId, mesePrecedente){
     return nums[nums.length-1];
   }catch(e){console.error('km err:',e);return null;}
 }
-async function cbPicker(d){
-  if(d.action!==google.picker.Action.PICKED)return;
-  const files=d.docs||[];
-  if(!files.length)return;
-  let i=0;
-  const next=async()=>{
-    if(i>=files.length){render();return;}
-    const f=files[i];
-    spin(true,`Analizzo ${f.name} (${i+1}/${files.length})...`);
-    try{
-      let p=null;
-      if(f.mimeType&&f.mimeType.startsWith('image/')){
-        const res=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{headers:{Authorization:'Bearer '+tok}});
-        const blob=await res.blob();
-        const data=await b64(blob);
-        p=await aiImg(data,f.mimeType);
-      }else if(f.mimeType==='application/pdf'){
-        const res=await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}/export?mimeType=text/plain`,{headers:{Authorization:'Bearer '+tok}});
-        if(res.ok){const txt=await res.text();p=await aiPdf(txt);}
-      }
-      spin(false);
-      if(p&&!p.skip){
-        confirm_({...p},form=>{sc.push({...form,id:Date.now(),fromDrive:true});if(form.categoria==='Gasolio'&&form.km)kmP=parseFloat(form.km);save();i++;next();},{idx:i,tot:files.length,fname:f.name});
-      }else{i++;next();}
-    }catch{spin(false);i++;next();}
-  };
-  next();
-}
+// cbPicker non più usato - sostituito da importaSelezionati()
 
 // ═══════════════════════ SESSIONE FOTO ═══════════════════════
 // Session: prende foto in sequenza finché l'utente non dice "ho finito"
@@ -883,7 +977,7 @@ async function aggiornaKmDaDrive(){
 }
 window.onload=()=>{
   load();
-  gapi.load('picker',()=>{gapiOk=true;});
+  gapiOk=true; // Non usiamo più il Picker, Drive API diretta
   const t=setInterval(()=>{if(typeof google!=='undefined'&&google.accounts){clearInterval(t);initGis();}},300);
   if(tok)startApp();else document.getElementById('login').style.display='flex';
 };
