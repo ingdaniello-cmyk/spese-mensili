@@ -240,14 +240,22 @@ const ZZZ_ID='1spHTpaE1kQKTlzMc9C0bn7KXG89hne2L';
 
 // Naviga Drive con API diretta — nessun Picker esterno
 async function driveList(parentId){
-  const url=`https://www.googleapis.com/drive/v3/files?q='${parentId}'+in+parents+and+trashed=false&orderBy=name&fields=files(id,name,mimeType)&pageSize=50`;
+  // Encode query correttamente
+  const q=encodeURIComponent(`'${parentId}' in parents and trashed=false`);
+  const url=`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=name&fields=files(id,name,mimeType)&pageSize=50&includeItemsFromAllDrives=true&supportsAllDrives=true`;
   const r=await fetch(url,{headers:{Authorization:'Bearer '+tok}});
   const d=await r.json();
+  if(d.error){console.error('Drive API error:',d.error);throw new Error(d.error.message);}
   return d.files||[];
 }
 
 function openPicker(){
-  if(!tok){alert('Effettua prima il login.');return;}
+  if(!tok){
+    // Token scaduto — richiedi nuovo login
+    window._tc.requestAccessToken({prompt:''});
+    return;
+  }
+  _dbSelected=[];
   mostraBrowser(ZZZ_ID,'📁 ZZZ NOTA SPESE',[]);
 }
 
@@ -350,7 +358,14 @@ async function mostraBrowser(folderId, folderName, breadcrumb){
       });
     },100);
   }catch(e){
-    document.getElementById('db-list').innerHTML=`<span style="color:#ff8a80;font-size:12px">Errore: ${e.message}</span>`;
+    console.error('Browser err:',e);
+    document.getElementById('db-list').innerHTML=`<div style="color:#ff8a80;font-size:12px;padding:12px">
+      ❌ ${e.message}<br><br>
+      <button onclick="tok=null;localStorage.removeItem('sm_tok');location.reload()" 
+        style="background:#3d6bfd;color:#fff;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:12px">
+        🔄 Rieffettua il login
+      </button>
+    </div>`;
   }
 }
 
