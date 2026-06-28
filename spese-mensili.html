@@ -205,37 +205,89 @@ function doLogin(){
 }
 
 // ═══════════════════════ AI ═══════════════════════
+const AI_HDR={'Content-Type':'application/json','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
+
 async function aiImg(b64,mt){
   const nc=cats.map(c=>c.n).join(', ');
-  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,
-      messages:[{role:'user',content:[
-        {type:'image',source:{type:'base64',media_type:mt,data:b64}},
-        {type:'text',text:`Analizza questo scontrino. Rispondi SOLO JSON valido, niente markdown.\n{"negozio":"...","data":"GG/MM/AAAA","totale":numero,"categoria":"una tra: ${nc}","pagamento":"POS o Contanti","commissioni":null,"km":null,"litri":null,"prezzoLitro":null}\nSe carburante compila km litri prezzoLitro.`}
-      ]}]})});
-  const d=await r.json();
-  return JSON.parse(d.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim());
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:AI_HDR,
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mt||'image/jpeg',data:b64}},
+          {type:'text',text:`Analizza questo scontrino. Rispondi SOLO JSON valido, niente markdown, niente testo extra.\n{"negozio":"nome negozio","data":"GG/MM/AAAA","totale":importo_numerico,"categoria":"una tra: ${nc}","pagamento":"POS o Contanti","commissioni":null,"km":null,"litri":null,"prezzoLitro":null}\nSe distributore carburante: compila km litri prezzoLitro.`}
+        ]}]})});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    const txt=d.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+    return JSON.parse(txt.slice(txt.indexOf('{'),txt.lastIndexOf('}')+1));
+  }catch(e){console.error('AI err:',e);return {negozio:'',data:'',totale:'',categoria:'Altro',pagamento:'POS'};}
 }
 async function aiPdf(txt){
   const nc=cats.map(c=>c.n).join(', ');
-  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,
-      messages:[{role:'user',content:`Se è uno scontrino di pagamento: {"negozio":"...","data":"GG/MM/AAAA","totale":numero,"categoria":"una tra: ${nc}","pagamento":"POS o Contanti","commissioni":null,"km":null,"litri":null,"prezzoLitro":null}. Altrimenti: {"skip":true}.\n\n${txt.slice(0,3000)}`}]})});
-  const d=await r.json();
-  return JSON.parse(d.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim());
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:AI_HDR,
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,
+        messages:[{role:'user',content:`Se è uno scontrino di pagamento rispondi con JSON: {"negozio":"...","data":"GG/MM/AAAA","totale":numero,"categoria":"una tra: ${nc}","pagamento":"POS o Contanti","commissioni":null,"km":null,"litri":null,"prezzoLitro":null}. Se NON è uno scontrino: {"skip":true}.\n\nTesto:\n${txt.slice(0,3000)}`}]})});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    const t=d.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+    return JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
+  }catch(e){console.error('PDF err:',e);return {skip:true};}
 }
 function b64(blob){return new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(',')[1]);r.onerror=ko;r.readAsDataURL(blob);});}
 
 // ═══════════════════════ PICKER ═══════════════════════
+const ZZZ_ID='1spHTpaE1kQKTlzMc9C0bn7KXG89hne2L';
+
 function openPicker(){
   if(!gapiOk||!tok){alert('Attendere...');return;}
+  // Vista navigabile che parte dalla cartella ZZZ NOTA SPESE
   const v=new google.picker.DocsView(google.picker.ViewId.DOCS)
     .setMimeTypes('image/jpeg,image/png,image/gif,image/webp,application/pdf')
-    .setMode(google.picker.DocsViewMode.LIST).setIncludeFolders(false);
+    .setMode(google.picker.DocsViewMode.LIST)
+    .setIncludeFolders(true)
+    .setSelectFolderEnabled(false)
+    .setParent(ZZZ_ID);
+  // Vista alternativa per navigare le sottocartelle
+  const vFolders=new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+    .setParent(ZZZ_ID)
+    .setSelectFolderEnabled(false);
   new google.picker.PickerBuilder()
-    .addView(v).setOAuthToken(tok).setDeveloperKey(API_KEY)
-    .setTitle('Seleziona PDF/foto dalla cartella ZZZ NOTA SPESE')
+    .addView(v)
+    .setOAuthToken(tok).setDeveloperKey(API_KEY)
+    .setTitle('📁 ZZZ NOTA SPESE → Anno → Mese → seleziona file')
     .setMaxItems(30).setCallback(cbPicker).build().setVisible(true);
+}
+
+// Legge i km finali dell'Excel del mese precedente da Drive
+async function leggiKmMesePrecedente(annoId, mesePrecedente){
+  try{
+    const mm=String(mesePrecedente).padStart(2,'0');
+    // Cerca la cartella del mese precedente
+    const res=await fetch(
+      `https://www.googleapis.com/drive/v3/files?q='${annoId}' in parents and mimeType='application/vnd.google-apps.folder' and name contains '${mm}'&fields=files(id,name)`,
+      {headers:{Authorization:'Bearer '+tok}});
+    const data=await res.json();
+    if(!data.files||!data.files.length)return null;
+    const meseId=data.files[0].id;
+    // Cerca il file Excel dentro quella cartella
+    const res2=await fetch(
+      `https://www.googleapis.com/drive/v3/files?q='${meseId}' in parents and (name contains '.xlsx' or mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')&fields=files(id,name)`,
+      {headers:{Authorization:'Bearer '+tok}});
+    const data2=await res2.json();
+    if(!data2.files||!data2.files.length)return null;
+    const xlsxId=data2.files[0].id;
+    // Scarica ed analizza con AI per trovare ultimi km Q8
+    const res3=await fetch(`https://www.googleapis.com/drive/v3/files/${xlsxId}/export?mimeType=text/csv`,{headers:{Authorization:'Bearer '+tok}});
+    if(!res3.ok)return null;
+    const csv=await res3.text();
+    // Cerca l'ultimo valore numerico nella colonna km (cerca pattern di km > 10000)
+    const matches=csv.match(/\b(\d{5,6})\b/g);
+    if(!matches)return null;
+    const nums=matches.map(Number).filter(n=>n>10000&&n<999999);
+    if(!nums.length)return null;
+    return nums[nums.length-1];
+  }catch(e){console.error('km err:',e);return null;}
 }
 async function cbPicker(d){
   if(d.action!==google.picker.Action.PICKED)return;
@@ -331,49 +383,147 @@ function spin(on,msg=''){
 }
 
 // ═══════════════════════ CONFIRM MODAL ═══════════════════════
+// Campi obbligatori: data e totale. Negozio obbligatorio.
+// Se mancanti, evidenzia in rosso e blocca il salvataggio.
+function campiMancanti(d){
+  // Determina quali campi sono stati rilevati dall'AI
+  const mancanti=[];
+  if(!d.negozio||d.negozio.trim()==='')mancanti.push('negozio');
+  if(!d.data||d.data.trim()==='')mancanti.push('data');
+  if(!d.totale&&d.totale!==0)mancanti.push('totale');
+  return mancanti;
+}
+
 function confirm_(d,cb,extra={}){
   close_('_mc');
+  const mancanti=campiMancanti(d);
+  const hasMissing=mancanti.length>0;
   const ov=document.createElement('div');ov.className='ov';ov.id='_mc';
-  const isG=()=>ov.querySelector('#fc')?.value==='Gasolio';
+
+  // Banner avviso campi mancanti
+  const banner=hasMissing?`
+    <div style="background:#3a1a0a;border:1px solid #ff6a00;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#ffaa55;line-height:1.6">
+      ⚠️ <strong>Dati non rilevati automaticamente</strong><br>
+      Compila i campi evidenziati in arancione per procedere.
+    </div>`:'';
+
+  // Helper per evidenziare campo mancante
+  const ipStyle=(campo)=>mancanti.includes(campo)?'border-color:#ff6a00!important;background:#1a1000':'';
+
   ov.innerHTML=`<div class="mo">
-    ${extra.idx!==undefined?`<div style="display:flex;justify-content:space-between;margin-bottom:10px"><span style="font-size:10px;color:var(--mu2);text-transform:uppercase;letter-spacing:2px">Drive · ${extra.idx+1}/${extra.tot}</span><span style="font-size:10px;color:var(--mu)">${(extra.fname||'').slice(0,22)}</span></div>`:''}
-    <div class="mts">Verifica e conferma</div><div class="mt">Dati scontrino</div>
-    ${d.preview?`<img src="${d.preview}" style="width:100%;max-height:120px;object-fit:cover;border-radius:9px;margin-bottom:12px" alt="">`:''}
-    <div class="lb">Negozio</div><input class="ip" id="fn" value="${d.negozio||''}" placeholder="Es. Esselunga...">
-    <div class="lb">Data</div><input class="ip" id="fd" value="${d.data||''}" placeholder="GG/MM/AAAA">
+    ${extra.idx!==undefined?`<div style="display:flex;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:10px;color:var(--mu2);text-transform:uppercase;letter-spacing:2px">${extra.fromDrive?'Drive':'Foto'} · ${extra.idx+1}/${extra.tot}</span>
+      <span style="font-size:10px;color:var(--mu)">${(extra.fname||'').slice(0,22)}</span></div>`:''}
+    <div class="mts">Verifica e conferma</div>
+    <div class="mt">${hasMissing?'⚠️ Completa i dati':'Dati scontrino'}</div>
+    ${d.preview?`<img src="${d.preview}" style="width:100%;max-height:110px;object-fit:cover;border-radius:9px;margin-bottom:10px" alt="">`:''}
+    ${banner}
+
+    <div class="lb" style="${mancanti.includes('negozio')?'color:#ff6a00':''}">
+      Negozio ${mancanti.includes('negozio')?'⚠️ obbligatorio':''}
+    </div>
+    <input class="ip" id="fn" value="${d.negozio||''}" placeholder="Es. Esselunga..." style="${ipStyle('negozio')}"
+      oninput="checkReady()">
+
+    <div class="lb" style="${mancanti.includes('data')?'color:#ff6a00':''}">
+      Data ${mancanti.includes('data')?'⚠️ obbligatoria':''}
+    </div>
+    <input class="ip" id="fd" value="${d.data||''}" placeholder="GG/MM/AAAA" style="${ipStyle('data')}"
+      oninput="checkReady()">
+
     <div class="lb">Categoria</div>
     <select class="ip" id="fc" onchange="toggleF()">
       ${cats.map(c=>`<option value="${c.n}" ${d.categoria===c.n?'selected':''}>${c.e} ${c.n}</option>`).join('')}
     </select>
-    <div class="lb">Importo (€)</div><input class="ip" id="ft" type="number" step="0.01" value="${d.totale||''}" placeholder="0.00">
+
+    <div class="lb" style="${mancanti.includes('totale')?'color:#ff6a00':''}">
+      Importo (€) ${mancanti.includes('totale')?'⚠️ obbligatorio':''}
+    </div>
+    <input class="ip" id="ft" type="number" step="0.01" value="${d.totale||''}" placeholder="0.00"
+      style="${ipStyle('totale')}" oninput="checkReady()">
+
     <div class="lb">Pagamento</div>
     <div class="pr">${['POS','Contanti','Entrambi'].map(p=>`<button class="pb ${(d.pagamento||'POS')===p?'pa':''}" onclick="selP(this,'${p}')">${p}</button>`).join('')}</div>
+
     <div id="fcr" style="display:${d.pagamento==='Contanti'||d.pagamento==='Entrambi'?'block':'none'}">
-      <div class="lb">Importo contanti (€)</div><input class="ip" id="fco" type="number" step="0.01" value="${d.contanti||''}" placeholder="0.00">
+      <div class="lb">Importo contanti (€)</div>
+      <input class="ip" id="fco" type="number" step="0.01" value="${d.contanti||''}" placeholder="0.00">
     </div>
-    <div class="lb">Commissioni (€)</div><input class="ip" id="fcomm" type="number" step="0.01" value="${d.commissioni||''}" placeholder="0.00">
+
+    <div class="lb">Commissioni (€)</div>
+    <input class="ip" id="fcomm" type="number" step="0.01" value="${d.commissioni||''}" placeholder="0.00">
+
     <div class="fuel" id="ff" style="display:${d.categoria==='Gasolio'?'block':'none'}">
       <div class="ft">⛽ Dati carburante</div>
       <div class="kmh">Km partenza mese prec.: <strong>${kmP.toLocaleString()}</strong></div>
-      <div class="lb">Km attuali</div><input class="ip" id="fkm" type="number" value="${d.km||''}" placeholder="${kmP}">
-      <div class="lb">Litri</div><input class="ip" id="flt" type="number" step="0.1" value="${d.litri||''}" placeholder="Es. 45.5">
-      <div class="lb">Prezzo al litro (€)</div><input class="ip" id="fpl" type="number" step="0.001" value="${d.prezzoLitro||''}" placeholder="Es. 1.899">
+      <div class="lb">Km attuali</div>
+      <input class="ip" id="fkm" type="number" value="${d.km||''}" placeholder="${kmP}">
+      <div class="lb">Litri</div>
+      <input class="ip" id="flt" type="number" step="0.1" value="${d.litri||''}" placeholder="Es. 45.5">
+      <div class="lb">Prezzo al litro (€)</div>
+      <input class="ip" id="fpl" type="number" step="0.001" value="${d.prezzoLitro||''}" placeholder="Es. 1.899">
     </div>
+
+    <div id="err-conf" style="display:none;background:#3e1515;border-radius:8px;padding:8px 12px;font-size:12px;color:#ff8a80;margin-bottom:8px"></div>
+
     <div class="mr">
       <button class="bsec" onclick="close_('_mc')">Annulla</button>
-      <button class="bpri" onclick="doConf()">✓ Conferma</button>
+      <button class="bpri" id="btn-conf" onclick="doConf()">✓ Conferma</button>
     </div>
   </div>`;
-  ov._cb=cb;document.body.appendChild(ov);
+  ov._cb=cb;
+  ov._mancanti=mancanti;
+  document.body.appendChild(ov);
+  // Se ci sono campi mancanti, porta il focus sul primo
+  if(mancanti.length>0){
+    setTimeout(()=>{
+      const primo=mancanti[0]==='negozio'?'fn':mancanti[0]==='data'?'fd':'ft';
+      document.getElementById(primo)?.focus();
+    },300);
+  }
 }
+
+window.checkReady=()=>{
+  // Aggiorna dinamicamente il bordo dei campi mentre l'utente li compila
+  const fields={fn:'negozio',fd:'data',ft:'totale'};
+  for(const [id,campo] of Object.entries(fields)){
+    const el=document.getElementById(id);
+    if(!el)continue;
+    if(el.value.trim()){
+      el.style.borderColor='var(--gn)'; // verde = compilato
+      el.style.background='#0d1a0d';
+    }
+  }
+};
+
 window.toggleF=()=>{const f=document.getElementById('ff');if(f)f.style.display=document.getElementById('fc')?.value==='Gasolio'?'block':'none';};
 window.selP=(btn,v)=>{document.querySelectorAll('.pb').forEach(b=>b.classList.remove('pa'));btn.classList.add('pa');const r=document.getElementById('fcr');if(r)r.style.display=(v==='Contanti'||v==='Entrambi')?'block':'none';};
+
 window.doConf=()=>{
   const el=document.getElementById('_mc');if(!el)return;
+  // Valida campi obbligatori
+  const negozio=document.getElementById('fn')?.value?.trim()||'';
+  const data=document.getElementById('fd')?.value?.trim()||'';
+  const totale=document.getElementById('ft')?.value||'';
+  const errori=[];
+  if(!negozio)errori.push('Negozio');
+  if(!data)errori.push('Data');
+  if(!totale)errori.push('Importo');
+
+  if(errori.length>0){
+    // Mostra errore e evidenzia campi
+    const errBox=document.getElementById('err-conf');
+    if(errBox){errBox.style.display='block';errBox.textContent='⚠️ Compila i campi obbligatori: '+errori.join(', ');}
+    // Evidenzia in rosso i campi vuoti
+    if(!negozio){const e=document.getElementById('fn');if(e){e.style.borderColor='#ff4444';e.style.background='#1a0a0a';e.focus();}}
+    else if(!data){const e=document.getElementById('fd');if(e){e.style.borderColor='#ff4444';e.style.background='#1a0a0a';e.focus();}}
+    else if(!totale){const e=document.getElementById('ft');if(e){e.style.borderColor='#ff4444';e.style.background='#1a0a0a';e.focus();}}
+    return; // BLOCCA — non va avanti
+  }
+
   const pay=el.querySelector('.pa');
   const form={
-    negozio:document.getElementById('fn')?.value||'',
-    data:document.getElementById('fd')?.value||'',
+    negozio,data,
     totale:document.getElementById('ft')?.value||'',
     categoria:document.getElementById('fc')?.value||'Altro',
     pagamento:pay?.textContent||'POS',
@@ -452,7 +602,13 @@ function renderHome(){
     <button class="bact" style="width:100%;flex-direction:row;justify-content:center;gap:10px;margin-bottom:6px;border-color:#1a8a1a" onclick="startSessione()">
       <span style="font-size:18px">📸📸📸</span><span class="lbl">Scatta più foto in sequenza</span>
     </button>
-    <button class="bpicker" onclick="openPicker()">☁️ Importa da ZZZ NOTA SPESE (Drive)</button>
+    <button class="bpicker" onclick="openPicker()" id="btnPicker">
+      ☁️ Importa da Drive
+    </button>
+    <div style="font-size:10px;color:var(--mu);text-align:center;margin:-4px 0 6px;line-height:1.5">
+      Parti da: ZZZ NOTA SPESE → naviga in Anno → Mese<br>
+      <span id="percorso-mese" style="color:var(--mu2)"></span>
+    </div>
     <button class="bsm" onclick="addCat()">+ Aggiungi categoria</button>
     <div id="err" style="display:none" class="err"></div>
     ${srt.length===0?`<div class="empty"><div class="ico">🧾</div><div class="t1">Nessuno scontrino</div><div class="t2">Fotografa o importa da Drive!</div></div>`:''}
@@ -460,6 +616,10 @@ function renderHome(){
   `;
   document.getElementById('ica').addEventListener('change',handleFile);
   document.getElementById('iga').addEventListener('change',handleFile);
+  // Mostra percorso mese corrente
+  const oggi=new Date();
+  const el=document.getElementById('percorso-mese');
+  if(el) el.textContent=`📂 ${oggi.getFullYear()} → ${String(oggi.getMonth()+1).padStart(2,'0')} ${MESI[oggi.getMonth()+1]} | Km partenza: ${kmP.toLocaleString()}`;
 }
 
 function renderCard(s){
@@ -694,10 +854,32 @@ function expPdfQ8(){
 }
 
 // ═══════════════════════ INIT ═══════════════════════
-function startApp(){
+async function startApp(){
   document.getElementById('login').style.display='none';
   document.getElementById('app').classList.add('on');
   render();
+  // Prova a caricare i km del mese precedente da Drive
+  await aggiornaKmDaDrive();
+}
+
+async function aggiornaKmDaDrive(){
+  try{
+    const oggi=new Date();
+    const mesePrec=oggi.getMonth()===0?12:oggi.getMonth(); // mese precedente (1-12)
+    const annoPrec=oggi.getMonth()===0?oggi.getFullYear()-1:oggi.getFullYear();
+    // Trova cartella anno
+    const res=await fetch(
+      `https://www.googleapis.com/drive/v3/files?q='${ZZZ_ID}' in parents and mimeType='application/vnd.google-apps.folder' and name='${annoPrec}'&fields=files(id,name)`,
+      {headers:{Authorization:'Bearer '+tok}});
+    const data=await res.json();
+    if(!data.files||!data.files.length)return;
+    const km=await leggiKmMesePrecedente(data.files[0].id, mesePrec);
+    if(km&&km!==kmP){
+      kmP=km;
+      save();
+      console.log('Km aggiornati da Drive:', km);
+    }
+  }catch(e){console.error('aggiorna km err:',e);}
 }
 window.onload=()=>{
   load();
