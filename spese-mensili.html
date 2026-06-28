@@ -287,26 +287,28 @@ async function mostraBrowser(folderId, folderName, breadcrumb){
     const docs=files.filter(f=>f.mimeType!=='application/vnd.google-apps.folder'&&
       (f.mimeType.startsWith('image/')||f.mimeType==='application/pdf'));
 
+    // Salva dati cartelle nell'overlay per navigazione sicura
+    const newBreadcrumb=[...breadcrumb,{id:folderId,name:folderName}];
+    ov._folderData={folders, docs, breadcrumb:newBreadcrumb, currentId:folderId, currentName:folderName};
+
     let html='';
+
+    // Torna indietro
+    if(breadcrumb.length>0){
+      html=`<div id="db-back" style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:#1a1a0d;border-radius:10px;margin-bottom:6px;cursor:pointer;border:1px solid #2a2a1a">
+        <span style="font-size:18px">⬆️</span>
+        <span style="font-size:13px;color:var(--or)">↑ Torna su</span>
+      </div>`;
+    }
+
     // Cartelle navigabili
-    folders.forEach(f=>{
-      html+=`<div onclick="mostraBrowser('${f.id}',\`📁 ${f.name}\`,[...document.getElementById('_db')._breadcrumb,{id:'${folderId}',name:'${folderName}'}])"
-        style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--bg2);border-radius:10px;margin-bottom:6px;cursor:pointer;border:1px solid var(--b1)">
+    folders.forEach((f,idx)=>{
+      html+=`<div data-folder-idx="${idx}" style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--bg2);border-radius:10px;margin-bottom:6px;cursor:pointer;border:1px solid var(--b1)">
         <span style="font-size:20px">📁</span>
         <span style="font-size:14px;color:var(--tx)">${f.name}</span>
         <span style="margin-left:auto;color:var(--mu)">›</span>
       </div>`;
     });
-
-    // Torna indietro
-    if(breadcrumb.length>0){
-      const prev=breadcrumb[breadcrumb.length-1];
-      html=`<div onclick="mostraBrowser('${prev.id}',\`${prev.name}\`,[...document.getElementById('_db')._breadcrumb.slice(0,-1)])"
-        style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:#1a1a0d;border-radius:10px;margin-bottom:6px;cursor:pointer;border:1px solid #2a2a1a">
-        <span style="font-size:18px">⬆️</span>
-        <span style="font-size:13px;color:var(--or)">Su: ${prev.name}</span>
-      </div>`+html;
-    }
 
     // File selezionabili
     if(docs.length){
@@ -325,6 +327,28 @@ async function mostraBrowser(folderId, folderName, breadcrumb){
     }
 
     listEl.innerHTML=html;
+    // Aggiungi event listener dopo render
+    setTimeout(()=>{
+      const dbOv=document.getElementById('_db');
+      if(!dbOv)return;
+      const fd=dbOv._folderData;
+      // Back button
+      const backBtn=document.getElementById('db-back');
+      if(backBtn&&fd){
+        backBtn.onclick=()=>{
+          const prev=fd.breadcrumb[fd.breadcrumb.length-2];
+          if(prev)mostraBrowser(prev.id,prev.name,fd.breadcrumb.slice(0,-2));
+        };
+      }
+      // Folder buttons
+      document.querySelectorAll('[data-folder-idx]').forEach(el=>{
+        el.onclick=()=>{
+          const idx=parseInt(el.getAttribute('data-folder-idx'));
+          const folder=fd.folders[idx];
+          if(folder)mostraBrowser(folder.id,'📁 '+folder.name,fd.breadcrumb);
+        };
+      });
+    },100);
   }catch(e){
     document.getElementById('db-list').innerHTML=`<span style="color:#ff8a80;font-size:12px">Errore: ${e.message}</span>`;
   }
