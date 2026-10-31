@@ -114,6 +114,17 @@ tfoot td{background:#1c1c2e;font-weight:700;border:none}
 /* ── Export section ── */
 .expsec{background:var(--bg2);border-radius:14px;padding:14px;margin-top:10px;border:1px solid var(--b1)}
 .exptt{font-size:11px;color:var(--mu2);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
+/* ── Gmail scanner ── */
+.gmail-item{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border-radius:12px;border:1px solid var(--b1);margin-bottom:7px;background:var(--bg2);cursor:pointer;transition:all .15s}
+.gmail-item.verde{border-color:#2a5a2a;background:#0d1a0d}
+.gmail-item.gialla{border-color:#5a4a0a;background:#1a1500}
+.gmail-item.sel{box-shadow:0 0 0 2px var(--gn)}
+.gmail-item.sel.gialla{box-shadow:0 0 0 2px var(--or)}
+.gmail-badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600;letter-spacing:.5px}
+.gmail-badge.v{background:#1a4a1a;color:var(--g2)}
+.gmail-badge.g{background:#3a2a00;color:var(--or)}
+.gmail-chk{width:20px;height:20px;border-radius:5px;border:2px solid var(--b2);background:transparent;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s}
+.gmail-chk.on{background:var(--gn);border-color:var(--gn)}
 /* ── Session (foto in corso) ── */
 .sess{background:#0d1e0d;border:1px solid #1a3a1a;border-radius:14px;padding:14px;margin-bottom:10px}
 .sess-t{font-size:13px;font-weight:600;color:var(--g2);margin-bottom:4px}
@@ -162,7 +173,7 @@ tfoot td{background:#1c1c2e;font-weight:700;border:none}
 // ═══════════════════════ CONFIG ═══════════════════════
 const CLIENT_ID='942404693526-riko3njld4ekjtcf44g194luscmv9oao.apps.googleusercontent.com';
 const API_KEY='AIzaSyCTsM4gHFG9qSF02dsNwO0rD6WUpo5-a9g';
-const SCOPES='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';
+const SCOPES='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/gmail.readonly';
 
 const MESI=['','GENNAIO','FEBBRAIO','MARZO','APRILE','MAGGIO','GIUGNO','LUGLIO','AGOSTO','SETTEMBRE','OTTOBRE','NOVEMBRE','DICEMBRE'];
 const CATS=[
@@ -599,9 +610,14 @@ function confirm_(d,cb,extra={}){
       oninput="checkReady()">
 
     <div class="lb">Categoria</div>
-    <select class="ip" id="fc" onchange="toggleF()">
+    <select class="ip" id="fc" onchange="toggleF();toggleNewCat()">
       ${cats.map(c=>`<option value="${c.n}" ${d.categoria===c.n?'selected':''}>${c.e} ${c.n}</option>`).join('')}
+      <option value="__nuova__" ${!cats.find(c=>c.n===d.categoria)&&d.categoria?'selected':''}>➕ Nuova...</option>
     </select>
+    <div id="fcnuova" style="display:${!cats.find(c=>c.n===d.categoria)&&d.categoria?'block':'none'}">
+      <div class="lb">Nome categoria</div>
+      <input class="ip" id="fcnn" placeholder="Es. Sport, Cinema..." value="${!cats.find(c=>c.n===d.categoria)&&d.categoria?d.categoria:''}" oninput="checkReady()">
+    </div>
 
     <div class="lb" style="${mancanti.includes('totale')?'color:#ff6a00':''}">
       Importo (€) ${mancanti.includes('totale')?'⚠️ obbligatorio':''}
@@ -664,6 +680,7 @@ window.checkReady=()=>{
 };
 
 window.toggleF=()=>{const f=document.getElementById('ff');if(f)f.style.display=document.getElementById('fc')?.value==='Gasolio'?'block':'none';};
+window.toggleNewCat=()=>{const v=document.getElementById('fc')?.value;const d=document.getElementById('fcnuova');if(d)d.style.display=v==='__nuova__'?'block':'none';};
 window.selP=(btn,v)=>{document.querySelectorAll('.pb').forEach(b=>b.classList.remove('pa'));btn.classList.add('pa');const r=document.getElementById('fcr');if(r)r.style.display=(v==='Contanti'||v==='Entrambi')?'block':'none';};
 
 window.doConf=()=>{
@@ -701,10 +718,25 @@ window.doConf=()=>{
   }
 
   const pay=el.querySelector('.pa');
+  let catSel=document.getElementById('fc')?.value||'Altro';
+  if(catSel==='__nuova__'){
+    const nuovaNome=(document.getElementById('fcnn')?.value||'').trim();
+    if(!nuovaNome){
+      const errBox=document.getElementById('err-conf');
+      if(errBox){errBox.style.display='block';errBox.textContent='⚠️ Inserisci il nome della nuova categoria';}
+      document.getElementById('fcnn')?.focus();
+      return;
+    }
+    catSel=nuovaNome;
+    // Aggiungi categoria se non esiste già
+    if(!cats.find(c=>c.n===nuovaNome)){
+      cats.push({n:nuovaNome,e:'📋',c:'#90A4AE'});save();
+    }
+  }
   const form={
     negozio,data,
     totale:document.getElementById('ft')?.value||'',
-    categoria:document.getElementById('fc')?.value||'Altro',
+    categoria:catSel,
     pagamento:pay?.textContent||'POS',
     contanti:document.getElementById('fco')?.value||'',
     commissioni:document.getElementById('fcomm')?.value||'',
@@ -788,6 +820,9 @@ function renderHome(){
       Parti da: ZZZ NOTA SPESE → naviga in Anno → Mese<br>
       <span id="percorso-mese" style="color:var(--mu2)"></span>
     </div>
+    <button class="bpicker" style="border-color:#1a2a3a;background:#0d1322;color:#80b4ff;margin-bottom:6px" onclick="scansionaGmail()">
+      📧 Importa ricevute da Gmail
+    </button>
     <button class="bsm" onclick="addCat()">+ Aggiungi categoria</button>
     <div id="err" style="display:none" class="err"></div>
     ${srt.length===0?`<div class="empty"><div class="ico">🧾</div><div class="t1">Nessuno scontrino</div><div class="t2">Fotografa o importa da Drive!</div></div>`:''}
@@ -1050,6 +1085,542 @@ function expPdfQ8(){
   const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),600);
 }
 
+// ═══════════════════════ GMAIL SCANNER ═══════════════════════
+
+// Mittenti / domini noti come ricevute lavorative
+const GMAIL_SENDERS=[
+  'noreply@anthropic.com','billing@anthropic.com','receipts@anthropic.com',
+  'noreply@openai.com','billing@openai.com','receipts@openai.com',
+  'noreply@google.com','payments-noreply@google.com','receipts@google.com',
+  'noreply@midjourney.com','billing@midjourney.com',
+  'noreply@perplexity.ai','billing@perplexity.ai',
+  'noreply@cursor.sh','billing@cursor.sh',
+  'noreply@github.com','billing@github.com',
+  'noreply@notion.so','billing@notion.so',
+  'noreply@figma.com','billing@figma.com',
+  'noreply@zoom.us','billing@zoom.us',
+  'receipts@stripe.com','invoice@stripe.com',
+  'noreply@paypal.com','service@paypal.it','service@paypal.com',
+  'noreply@amazon.it','order-update@amazon.it','auto-confirm@amazon.it',
+  'noreply@apple.com','purchases@apple.com',
+  'no-reply@chatgpt.com',
+];
+// Parole chiave oggetto email
+const GMAIL_KEYWORDS=[
+  'ricevuta','receipt','invoice','fattura','pagamento','payment','billing',
+  'abbonamento','subscription','acquisto','purchase','ordine','order',
+  'addebito','charge','conferma','confirmation','rinnovo','renewal',
+];
+// Esclusi sempre
+const GMAIL_ESCLUSI=[
+  'microsoft.com','office.com','microsoftonline.com','live.com',
+];
+
+async function gmailFetch(path,params={}){
+  const qs=new URLSearchParams(params).toString();
+  const url=`https://gmail.googleapis.com/gmail/v1${path}${qs?'?'+qs:''}`;
+  const r=await fetch(url,{headers:{Authorization:'Bearer '+tok}});
+  if(!r.ok)throw new Error(`Gmail API ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+function gmailIsEscluso(from='',subject=''){
+  const f=from.toLowerCase();
+  return GMAIL_ESCLUSI.some(d=>f.includes(d));
+}
+function gmailIsCandidato(from='',subject=''){
+  const f=from.toLowerCase();const s=subject.toLowerCase();
+  if(GMAIL_SENDERS.some(m=>f.includes(m.toLowerCase())))return true;
+  if(GMAIL_KEYWORDS.some(k=>s.includes(k)))return true;
+  return false;
+}
+
+async function aiAnalizzaEmail(from,subject,bodyText){
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:AI_HDR,
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,
+        messages:[{role:'user',content:`Sei un assistente che classifica email per rimborso spese aziendali di un Project Manager edile.
+
+Email:
+DA: ${from}
+OGGETTO: ${subject}
+TESTO: ${bodyText.slice(0,2000)}
+
+Rispondi SOLO con JSON valido:
+{
+  "rimborsabile": true/false/null,
+  "motivo": "breve spiegazione (max 15 parole)",
+  "negozio": "nome servizio/fornitore",
+  "importo": numero_o_null,
+  "categoria": "una tra: Altro/Farmacia/Trasporti/Alloggio/Ristoranti/Automobile",
+  "domanda": "domanda da fare all'utente se dubbio, altrimenti null"
+}
+
+REGOLE:
+- rimborsabile=true: tool AI (OpenAI, Anthropic, Claude, Midjourney, Perplexity, Cursor, GitHub Copilot), Google Drive/Workspace, software professionale, hardware/elettronica per lavoro, abbonamenti professionali
+- rimborsabile=false: abbonamenti personali (Netflix, Spotify, gaming), acquisti personali chiari, Microsoft 365 Personal
+- rimborsabile=null (dubbio): Amazon (potrebbe essere personale o lavoro), Apple (idem), hardware ambiguo → usa "domanda" per chiedere
+- Se NON è una ricevuta/fattura: {"rimborsabile":false,"motivo":"non è una ricevuta","negozio":null,"importo":null,"categoria":null,"domanda":null}`}]})});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    const t=d.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim();
+    return JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
+  }catch(e){console.error('AI Gmail err:',e);return null;}
+}
+
+function gmailGetBody(payload){
+  // Estrae testo plain da payload MIME
+  if(!payload)return '';
+  const parts=[payload,...(payload.parts||[])];
+  for(const p of parts){
+    if(p.mimeType==='text/plain'&&p.body?.data){
+      return atob(p.body.data.replace(/-/g,'+').replace(/_/g,'/'));
+    }
+  }
+  // fallback html → strip tags
+  for(const p of parts){
+    if(p.mimeType==='text/html'&&p.body?.data){
+      const html=atob(p.body.data.replace(/-/g,'+').replace(/_/g,'/'));
+      return html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    }
+  }
+  return '';
+}
+
+function gmailGetPdfAttachment(payload){
+  // Ritorna {attachmentId, filename} del primo PDF trovato, o null
+  const walk=(p)=>{
+    if(!p)return null;
+    if(p.mimeType==='application/pdf'&&p.body?.attachmentId)
+      return {attachmentId:p.body.attachmentId,filename:p.filename||'ricevuta.pdf'};
+    for(const sub of (p.parts||[])){const r=walk(sub);if(r)return r;}
+    return null;
+  };
+  return walk(payload);
+}
+
+async function gmailDownloadPdf(msgId,attachmentId){
+  const d=await gmailFetch(`/users/me/messages/${msgId}/attachments/${attachmentId}`);
+  const raw=d.data.replace(/-/g,'+').replace(/_/g,'/');
+  const bin=atob(raw);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return new Blob([bytes],{type:'application/pdf'});
+}
+
+function gmailEmailHtml(from,subject,date,bodyText){
+  // Genera HTML dell'email come fallback quando non c'è PDF
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${subject}</title>
+  <style>body{font-family:Arial,sans-serif;padding:20px;max-width:700px;margin:0 auto}
+  .hd{background:#f0f4ff;padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px}
+  pre{white-space:pre-wrap;font-family:Arial,sans-serif;font-size:13px}</style></head>
+  <body><div class="hd"><b>Da:</b> ${from}<br><b>Oggetto:</b> ${subject}<br><b>Data:</b> ${date}</div>
+  <pre>${bodyText.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre></body></html>`;
+}
+
+// Stato globale scanner Gmail
+let _gmailRisultati=[];
+
+async function scansionaGmail(){
+  if(!tok){alert('Accedi prima con Google');return;}
+
+  // Range mese corrente
+  const oggi=new Date();
+  const inizio=new Date(oggi.getFullYear(),oggi.getMonth(),1);
+  const after=Math.floor(inizio.getTime()/1000);
+  const before=Math.floor(oggi.getTime()/1000)+86400;
+
+  spin(true,'📧 Cerco ricevute in Gmail...');
+  try{
+    // Query Gmail
+    const senderQ=GMAIL_SENDERS.map(s=>`from:${s}`).join(' OR ');
+    const kwQ=GMAIL_KEYWORDS.map(k=>`subject:${k}`).join(' OR ');
+    const query=`(${senderQ} OR ${kwQ}) after:${after} before:${before}`;
+
+    const list=await gmailFetch('/users/me/messages',{q:query,maxResults:'50'});
+    const msgs=list.messages||[];
+
+    if(!msgs.length){spin(false);alert('📭 Nessuna email trovata per questo mese.');return;}
+
+    spin(true,`📧 Analizzo ${msgs.length} email con Claude...`);
+    const risultati=[];
+
+    for(let i=0;i<msgs.length;i++){
+      spin(true,`📧 Analizzo email ${i+1}/${msgs.length}...`);
+      try{
+        const msg=await gmailFetch(`/users/me/messages/${msgs[i].id}`,{format:'full'});
+        const headers=msg.payload?.headers||[];
+        const from=headers.find(h=>h.name.toLowerCase()==='from')?.value||'';
+        const subject=headers.find(h=>h.name.toLowerCase()==='subject')?.value||'';
+        const dateH=headers.find(h=>h.name.toLowerCase()==='date')?.value||'';
+
+        // Escludi Microsoft 365 Personal
+        if(gmailIsEscluso(from,subject))continue;
+        // Pre-filtro: deve sembrare una ricevuta
+        if(!gmailIsCandidato(from,subject))continue;
+
+        const bodyText=gmailGetBody(msg.payload);
+        const pdf=gmailGetPdfAttachment(msg.payload);
+
+        // Claude analizza
+        const ai=await aiAnalizzaEmail(from,subject,bodyText);
+        if(!ai||ai.rimborsabile===false)continue;
+
+        // Estrai data dal header email → formato GG/MM/AAAA
+        let dataFmt='';
+        try{
+          const d=new Date(dateH);
+          dataFmt=`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+        }catch{}
+
+        risultati.push({
+          msgId:msgs[i].id,
+          from,subject,dateH,dataFmt,
+          bodyText,pdf,
+          ai,
+          tipo:ai.rimborsabile===true?'verde':'gialla',
+          selezionato:ai.rimborsabile===true, // auto-seleziona i certi
+          rispostaUtente:null // per le domande gialle
+        });
+      }catch(e){console.error('Err msg:',msgs[i].id,e);}
+    }
+
+    spin(false);
+    _gmailRisultati=risultati;
+
+    if(!risultati.length){alert('✅ Nessuna ricevuta rimborsabile trovata questo mese.');return;}
+    mostraModalGmail();
+  }catch(e){
+    spin(false);
+    console.error('Gmail scan err:',e);
+    alert('❌ Errore Gmail:\n'+e.message+'\n\nAssicurati di aver dato il permesso Gmail al login.');
+  }
+}
+
+function mostraModalGmail(){
+  close_('_gm');
+  const verdi=_gmailRisultati.filter(r=>r.tipo==='verde');
+  const gialle=_gmailRisultati.filter(r=>r.tipo==='gialla');
+  const ov=document.createElement('div');ov.className='ov';ov.id='_gm';
+
+  const renderItem=(r,idx)=>`
+    <div class="gmail-item ${r.tipo} ${r.selezionato?'sel':''}" id="gmi-${idx}" onclick="toggleGmailItem(${idx})">
+      <div class="gmail-chk ${r.selezionato?'on':''}" id="gmc-${idx}">${r.selezionato?'✓':''}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span class="gmail-badge ${r.tipo==='verde'?'v':'g'}">${r.tipo==='verde'?'✅ LAVORO':'⚠️ DUBBIO'}</span>
+          <span style="font-size:11px;color:var(--mu)">${r.dataFmt||''}</span>
+        </div>
+        <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.ai?.negozio||r.subject}</div>
+        <div style="font-size:11px;color:var(--mu2)">${r.ai?.motivo||''}</div>
+        ${r.ai?.importo?`<div style="font-size:14px;font-weight:700;color:var(--bl);margin-top:3px">€ ${parseFloat(r.ai.importo).toFixed(2)}</div>`:''}
+        ${r.ai?.domanda&&r.tipo==='gialla'?`<div style="margin-top:7px;background:#1a1200;border:1px solid #3a2a00;border-radius:8px;padding:7px 10px">
+          <div style="font-size:11px;color:var(--or);margin-bottom:5px">❓ ${r.ai.domanda}</div>
+          <div style="display:flex;gap:6px">
+            <button onclick="event.stopPropagation();rispondiGmail(${idx},true)" style="flex:1;padding:5px;border-radius:7px;border:1px solid #2a5a2a;background:#0d1a0d;color:var(--g2);font-size:11px;cursor:pointer">✓ Sì, lavoro</button>
+            <button onclick="event.stopPropagation();rispondiGmail(${idx},false)" style="flex:1;padding:5px;border-radius:7px;border:1px solid var(--b2);background:transparent;color:var(--mu2);font-size:11px;cursor:pointer">✗ No, personale</button>
+          </div>
+        </div>`:''}
+        <div style="font-size:10px;color:var(--mu);margin-top:4px">${r.pdf?'📎 PDF allegato':'📄 Testo email'} · ${r.ai?.categoria||'Altro'}</div>
+      </div>
+    </div>`;
+
+  ov.innerHTML=`<div class="mo" style="max-height:88vh">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:15px;font-weight:700;font-family:'Playfair Display',serif">📧 Ricevute Gmail</div>
+      <button onclick="close_('_gm')" style="background:none;border:none;color:var(--mu2);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--mu2);margin-bottom:12px">
+      ${verdi.length} certe ✅ · ${gialle.length} da verificare ⚠️ — seleziona quelle da importare
+    </div>
+    ${verdi.length?`<div style="font-size:10px;color:var(--g2);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">Spese di lavoro</div>
+    ${verdi.map((r,i)=>renderItem(r,_gmailRisultati.indexOf(r))).join('')}`:''}
+    ${gialle.length?`<div style="font-size:10px;color:var(--or);letter-spacing:2px;text-transform:uppercase;margin:10px 0 6px">Da verificare</div>
+    ${gialle.map((r,i)=>renderItem(r,_gmailRisultati.indexOf(r))).join('')}`:''}
+    <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--b1)">
+      <button class="bsec" onclick="close_('_gm')">Annulla</button>
+      <button class="bpri" onclick="importaGmail()" id="btn-gmail-imp">
+        ✓ Importa selezionate (<span id="gmail-cnt">${_gmailRisultati.filter(r=>r.selezionato).length}</span>)
+      </button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+
+window.toggleGmailItem=(idx)=>{
+  const r=_gmailRisultati[idx];
+  if(!r)return;
+  r.selezionato=!r.selezionato;
+  const item=document.getElementById(`gmi-${idx}`);
+  const chk=document.getElementById(`gmc-${idx}`);
+  if(item)item.classList.toggle('sel',r.selezionato);
+  if(chk){chk.classList.toggle('on',r.selezionato);chk.textContent=r.selezionato?'✓':'';}
+  const cnt=_gmailRisultati.filter(r=>r.selezionato).length;
+  const el=document.getElementById('gmail-cnt');if(el)el.textContent=cnt;
+};
+
+window.rispondiGmail=(idx,siLavoro)=>{
+  const r=_gmailRisultati[idx];if(!r)return;
+  r.rispostaUtente=siLavoro;
+  r.selezionato=siLavoro;
+  r.tipo=siLavoro?'verde':'gialla';
+  mostraModalGmail(); // ri-renderizza
+};
+
+async function importaGmail(){
+  const sel=_gmailRisultati.filter(r=>r.selezionato);
+  if(!sel.length){alert('Nessuna ricevuta selezionata');return;}
+  close_('_gm');
+  spin(true,`Importo ${sel.length} ricevute...`);
+
+  const oggi=new Date();
+  const mNum=oggi.getMonth()+1;
+  const anno=oggi.getFullYear();
+  const mLabel=String(mNum).padStart(2,'0');
+  const nomeMese=`${mLabel} ${MESI_NOMI[mNum]}`;
+
+  try{
+    // Trova/crea cartella Drive del mese
+    const annoId=await trovaCreaCartella(ZZZ_ID,String(anno),String(anno));
+    const meseId=await trovaCreaCartella(annoId,mLabel,nomeMese);
+
+    let importati=0;
+    for(const r of sel){
+      spin(true,`Importo: ${r.ai?.negozio||r.subject} (${importati+1}/${sel.length})`);
+      try{
+        // Crea scontrino
+        const spesa={
+          negozio:r.ai?.negozio||r.subject,
+          data:r.dataFmt||'',
+          totale:r.ai?.importo?String(r.ai.importo):'',
+          categoria:r.ai?.categoria||'Altro',
+          pagamento:'POS',
+          contanti:'',commissioni:'',km:'',litri:'',prezzoLitro:'',
+          preview:null
+        };
+        sc.push(spesa);
+
+        // Carica file su Drive
+        const safeName=(r.ai?.negozio||r.subject).replace(/[^a-zA-Z0-9_\-À-ɏ]/g,'_').slice(0,40);
+        if(r.pdf){
+          // Scarica e carica PDF
+          const pdfBlob=await gmailDownloadPdf(r.msgId,r.pdf.attachmentId);
+          await uploadToDrive(pdfBlob,`Gmail_${mLabel}_${safeName}.pdf`,'application/pdf',meseId);
+        }else{
+          // Carica HTML dell'email
+          const html=gmailEmailHtml(r.from,r.subject,r.dateH,r.bodyText);
+          const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+          await uploadToDrive(blob,`Gmail_${mLabel}_${safeName}.html`,'text/html',meseId);
+        }
+        importati++;
+      }catch(e){console.error('Importa err:',r.subject,e);}
+    }
+
+    save();
+    spin(false);
+    render();
+    alert(`✅ Importate ${importati} ricevute Gmail!\n\nScontrini aggiunti e file caricati in Drive:\n${anno} / ${nomeMese}`);
+  }catch(e){
+    spin(false);
+    console.error('Import Gmail err:',e);
+    alert('❌ Errore importazione:\n'+e.message);
+  }
+}
+
+// ═══════════════════════ GENERA DOCX DICHIARAZIONE ═══════════════════════
+function genDocxBlob(mNum,anno){
+  // Calcola totali per categoria secondo schema dichiarazione
+  const mLabel=String(mNum).padStart(2,'0');
+  const mLabelYY=`${mLabel}/${String(anno).slice(2)}`;
+  const oggi=new Date(anno,mNum-1,1);
+  const giorni=new Date(anno,mNum,0).getDate();
+  const dataInizio=`01 / ${mLabel} /${String(anno).slice(2)}`;
+  const dataFine=`${String(giorni).padStart(2,'0')} / ${mLabel} /${String(anno).slice(2)}`;
+
+  // Mappa categorie app → righe dichiarazione
+  const CAT_DICH={
+    'Ristoranti':  'RISTORAZIONE/BAR',
+    'Alloggio':    'ALLOGGIO',
+    'Automobile':  'AUTOVETTURE/AUTOMEZZI',
+    'Gasolio':     'RIFORNIMENTO CARBURANTE',
+    'Alimentari':  'RISTORAZIONE/BAR',
+    'Farmacia':    'ALTRO',
+    'Trasporti':   'TRENO',
+    'Altro':       'ALTRO'
+  };
+
+  // Aggrega per riga
+  const righe={
+    'TRENO':0,'AEREO':0,'ALLOGGIO':0,'RISTORAZIONE/BAR':0,
+    'MATERIALE DI PRODUZIONE':0,'AUTOVETTURE/AUTOMEZZI':0,
+    'TAXI':0,'RIFORNIMENTO CARBURANTE':0,'ALTRO':0
+  };
+  const altroDettagli=[];
+  sc.forEach(s=>{
+    const imp=parseFloat(s.totale)||0;
+    const dest=CAT_DICH[s.categoria]||'ALTRO';
+    righe[dest]=(righe[dest]||0)+imp;
+    if(dest==='ALTRO'&&!['Farmacia'].includes(s.categoria)&&!CAT_DICH[s.categoria]){
+      altroDettagli.push(s.categoria);
+    }
+    if(s.categoria==='Farmacia'||(!CAT_DICH[s.categoria])){
+      righe['ALTRO']=(righe['ALTRO']||0)+imp;
+      if(s.categoria==='Farmacia') righe['RISTORAZIONE/BAR']-=imp; // non sommare doppio
+    }
+  });
+  // Ri-calcola con logica corretta
+  Object.keys(righe).forEach(k=>righe[k]=0);
+  sc.forEach(s=>{
+    const imp=parseFloat(s.totale)||0;
+    const cat=s.categoria;
+    if(cat==='Ristoranti'||cat==='Alimentari') righe['RISTORAZIONE/BAR']+=imp;
+    else if(cat==='Alloggio') righe['ALLOGGIO']+=imp;
+    else if(cat==='Automobile') righe['AUTOVETTURE/AUTOMEZZI']+=imp;
+    else if(cat==='Gasolio') righe['RIFORNIMENTO CARBURANTE']+=imp;
+    else if(cat==='Trasporti') righe['TRENO']+=imp;
+    else righe['ALTRO']+=imp;
+  });
+
+  const totale=Object.values(righe).reduce((a,v)=>a+v,0);
+  const totContanti=sc.reduce((a,s)=>{
+    if(s.pagamento==='Contanti')return a+(parseFloat(s.totale)||0);
+    if(s.pagamento==='Entrambi')return a+(parseFloat(s.contanti)||0);
+    return a;
+  },0);
+  const totCarta=totale-totContanti;
+
+  const fmtEuro=(v)=>v>0?`€${v.toFixed(2)}`:'€…………………………………………………………...';
+  const fmtEuroSe=(v)=>v>0?`€ ${v.toFixed(2)}`:'€ …………';
+
+  // Categorie custom non mappate → descrizione in ALTRO
+  const catsCustom=[...new Set(sc.filter(s=>!['Ristoranti','Alloggio','Automobile','Gasolio','Alimentari','Farmacia','Trasporti','Altro'].includes(s.categoria)).map(s=>s.categoria))];
+  const altroDesc=catsCustom.length>0?catsCustom.join(', '):'';
+
+  // Costruisce document.xml OOXML minimo
+  const esc=(s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const par=(txt,bold=false,sz=20,align='',color='',indent=0)=>{
+    const bPr=bold?'<w:b/>':'';
+    const jc=align?`<w:jc w:val="${align}"/>`:'';
+    const clr=color?`<w:color w:val="${color}"/>`:'';
+    const ind=indent?`<w:ind w:left="${indent}"/>`:'';
+    return `<w:p><w:pPr>${jc}${ind}<w:spacing w:after="60"/></w:pPr><w:r><w:rPr>${bPr}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>${clr}</w:rPr><w:t xml:space="preserve">${esc(txt)}</w:t></w:r></w:p>`;
+  };
+  const tbl=(rows)=>`<w:tbl><w:tblPr><w:tblW w:w="9200" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders></w:tblPr>${rows.map(r=>`<w:tr>${r.map(({txt,bold=false,w=4600,shd=''})=>`<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${shd?`<w:shd w:val="clear" w:color="auto" w:fill="${shd}"/>`:''}</w:tcPr><w:p><w:pPr><w:spacing w:after="60"/></w:pPr><w:r><w:rPr>${bold?'<w:b/>':''}<w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">${esc(txt)}</w:t></w:r></w:p></w:tc>`).join('')}</w:tr>`).join('')}</w:tbl>`;
+
+  const righeTabella=[
+    [{txt:'TIPOLOGIA SPESA',bold:true,w:5500,shd:'DDDDDD'},{txt:'IMPORTO',bold:true,w:3700,shd:'DDDDDD'}],
+    [{txt:'TRENO   Allegate ricevute o biglietti',w:5500},{txt:fmtEuro(righe['TRENO']),w:3700}],
+    [{txt:'AEREO   Allegate ricevute o biglietti',w:5500},{txt:fmtEuro(righe['AEREO']),w:3700}],
+    [{txt:'ALLOGGIO   Allegate fatture o ricevute',w:5500},{txt:fmtEuro(righe['ALLOGGIO']),w:3700}],
+    [{txt:'RISTORAZIONE/BAR   Allegate fatture o ricevute',w:5500},{txt:fmtEuro(righe['RISTORAZIONE/BAR']),w:3700}],
+    [{txt:'MATERIALE DI PRODUZIONE   Allegate fatture o ricevute',w:5500},{txt:fmtEuro(righe['MATERIALE DI PRODUZIONE']),w:3700}],
+    [{txt:'AUTOVETTURE/AUTOMEZZI   Allegate fatture o ricevute'+
+      (righe['AUTOVETTURE/AUTOMEZZI']>0?'\nParcheggio e lavaggio':''),w:5500},
+     {txt:fmtEuro(righe['AUTOVETTURE/AUTOMEZZI']),w:3700}],
+    [{txt:'TAXI   Allegati giustificativi o biglietti',w:5500},{txt:fmtEuro(righe['TAXI']),w:3700}],
+    [{txt:'RIFORNIMENTO CARBURANTE   Allegati giustificativi o biglietti',w:5500},{txt:fmtEuro(righe['RIFORNIMENTO CARBURANTE']),w:3700}],
+    [{txt:'ALTRO'+(altroDesc?'   '+altroDesc:'')+'   Allegati giustificativi o biglietti',w:5500},{txt:fmtEuro(righe['ALTRO']),w:3700}],
+    [{txt:'TOTALE',bold:true,w:5500,shd:'EEEEEE'},{txt:`€ ${totale.toFixed(2)}`,bold:true,w:3700,shd:'EEEEEE'}]
+  ];
+
+  const xmlBody=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+  xmlns:mo="http://schemas.microsoft.com/office/mac/office/2008/main"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:mv="urn:schemas-microsoft-com:mac:vml"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:w10="urn:schemas-microsoft-com:office:word"
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
+  xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
+  xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
+  xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+  xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+  mc:Ignorable="w14 wp14">
+<w:body>
+${par('DICHIARAZIONE SPESE DI VITTO',true,26,'center')}
+${par('(Ai sensi dell\'art. 46 e 47 del D.P.R. n. 445 del 28/12/2000)',false,18,'center')}
+${par('')}
+${par('Il sottoscritto D\'Aniello Giuseppe nato il 25/12/1969 a Napoli e domiciliato a Cesenatico in Via le Arno, 31a,',false,20)}
+${par('dipendente della R.C.M. COSTRUZIONI S.R.L, con sede legale in Sarno alla Via Pioppazze 45, C.F. e P.Iva 01808910655',false,20)}
+${par('consapevole delle sanzioni penali, nel caso di dichiarazioni non veritiere e falsità negli atti, richiamate',false,20)}
+${par('dall\'art. 76 del D.P.R. 445 del 28/12/2000',false,20)}
+${par('')}
+${par('DICHIARA',true,22,'center')}
+${par('')}
+${par(`di aver sostenuto dal ${dataInizio} al ${dataFine}, durante lo svolgimento di missioni aziendali presso il cantiere "C158"`,false,20)}
+${par('le seguenti spese secondo lo schema riportato di seguito;',false,20)}
+${par('')}
+${tbl(righeTabella)}
+${par('')}
+${par(`Spese sostenute in contanti  € ${totContanti>0?totContanti.toFixed(2):'0'}`,false,20)}
+${par(`Spese sostenute con carta di credito propria  € ${totCarta>0?totCarta.toFixed(2):'0'}`,false,20)}
+${par('Spese sostenute con carta di credito della società  € …………',false,20)}
+${par('Allegati n.ro giustificativi',false,20)}
+${par('')}
+${par(`Sarno,`,false,20)}
+${par('')}
+${par('In fede',false,20)}
+${par('_________________________________',false,20)}
+<w:sectPr>
+  <w:pgSz w:w="12240" w:h="15840"/>
+  <w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="709" w:footer="709" w:gutter="0"/>
+</w:sectPr>
+</w:body></w:document>`;
+
+  // Costruisce DOCX come ZIP in-memory usando operazioni binarie
+  const enc=new TextEncoder();
+  const files={
+    '[Content_Types].xml':enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`),
+    '_rels/.rels':enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`),
+    'word/document.xml':enc.encode(xmlBody),
+    'word/_rels/document.xml.rels':enc.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+</Relationships>`)
+  };
+
+  // ZIP builder minimale
+  function zipFiles(entries){
+    const crc32Table=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[i]=c;}return t;})();
+    const crc32=(buf)=>{let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=crc32Table[(c^buf[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0;};
+    const u16=(n)=>[n&0xFF,(n>>8)&0xFF];const u32=(n)=>[n&0xFF,(n>>8)&0xFF,(n>>16)&0xFF,(n>>24)&0xFF];
+    const parts=[];const centralDir=[];let offset=0;
+    for(const [name,data] of Object.entries(entries)){
+      const nameBytes=enc.encode(name);const crc=crc32(data);
+      const lh=[0x50,0x4B,0x03,0x04,0x14,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+        ...u32(crc),...u32(data.length),...u32(data.length),...u16(nameBytes.length),...u16(0),...nameBytes,...data];
+      centralDir.push([0x50,0x4B,0x01,0x02,0x14,0x00,0x14,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+        ...u32(crc),...u32(data.length),...u32(data.length),...u16(nameBytes.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(offset),...nameBytes]);
+      offset+=lh.length;parts.push(new Uint8Array(lh));
+    }
+    const cdStart=offset;let cdLen=0;
+    const cdParts=centralDir.map(cd=>{cdLen+=cd.length;return new Uint8Array(cd);});
+    const eocd=new Uint8Array([0x50,0x4B,0x05,0x06,0x00,0x00,0x00,0x00,
+      ...u16(centralDir.length),...u16(centralDir.length),...u32(cdLen),...u32(cdStart),...u16(0)]);
+    const all=[...parts,...cdParts,eocd];
+    const total=all.reduce((a,p)=>a+p.length,0);
+    const out=new Uint8Array(total);let pos=0;
+    for(const p of all){out.set(p,pos);pos+=p.length;}
+    return out;
+  }
+
+  const zipBytes=zipFiles(files);
+  return new Blob([zipBytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+}
+
 // ═══════════════════════ SALVA SU DRIVE ═══════════════════════
 const MESI_NOMI={1:'GENNAIO',2:'FEBBRAIO',3:'MARZO',4:'APRILE',5:'MAGGIO',6:'GIUGNO',
   7:'LUGLIO',8:'AGOSTO',9:'SETTEMBRE',10:'OTTOBRE',11:'NOVEMBRE',12:'DICEMBRE'};
@@ -1148,8 +1719,14 @@ async function salvasuDrive(){
       await uploadToDrive(blobQ8,`Ricevute_Q8_${mLabel}_${anno}.html`,'text/html',meseId);
     }
 
+    // Genera e carica DOCX dichiarazione
+    spin(true,'Genero dichiarazione Word...');
+    const docxBlob=genDocxBlob(mNum,anno);
+    const docxName=`nota_spese_dichiarazione_${mLabel}_${String(anno).slice(2)}.docx`;
+    await uploadToDrive(docxBlob,docxName,'application/vnd.openxmlformats-officedocument.wordprocessingml.document',meseId);
+
     spin(false);
-    alert(`✅ File caricati su Drive!\n\nCartella: ${anno} / ${nomeMese}\n• ${xlsxName}\n• Scontrini_${mLabel}_${anno}.html${gasItems.length>0?`\n• Ricevute_Q8_${mLabel}_${anno}.html`:''}`);
+    alert(`✅ File caricati su Drive!\n\nCartella: ${anno} / ${nomeMese}\n• ${xlsxName}\n• ${docxName}\n• Scontrini_${mLabel}_${anno}.html${gasItems.length>0?`\n• Ricevute_Q8_${mLabel}_${anno}.html`:''}`);
   }catch(e){
     spin(false);
     console.error('Drive upload error:',e);
